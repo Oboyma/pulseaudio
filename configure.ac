@@ -1122,6 +1122,22 @@ AC_SUBST(HAVE_SYSTEMD)
 AM_CONDITIONAL([HAVE_SYSTEMD], [test "x$HAVE_SYSTEMD" = x1])
 AS_IF([test "x$HAVE_SYSTEMD" = "x1"], AC_DEFINE([HAVE_SYSTEMD], 1, [Have SYSTEMD?]))
 
+#### Desktop Notifications support (optional, dependant on D-Bus) ####
+
+AC_ARG_ENABLE([desktop-notifications],
+    AS_HELP_STRING([--disable-desktop-notifications],[Disable optional desktop notifications support]))
+
+AS_IF([test "x$enable_desktop_notifications" != "xno"],
+    HAVE_DESKTOP_NOTIFICATIONS=1,
+    HAVE_DESKTOP_NOTIFICATIONS=0)
+
+AS_IF([test "x$HAVE_DBUS" != "x1"], HAVE_DESKTOP_NOTIFICATIONS=0)
+
+AS_IF([test "x$enable_desktop_notifications" != "xyes" && test "x$HAVE_DESKTOP_NOTIFICATIONS" = "x0"],
+    [AC_MSG_ERROR([*** Desktop Notifications support not found (requires D-Bus)])])
+
+AM_CONDITIONAL([HAVE_DESKTOP_NOTIFICATIONS], [test "x$HAVE_DESKTOP_NOTIFICATIONS" = x1])
+
 #### Build and Install man pages ####
 
 AC_ARG_ENABLE([manpages],
