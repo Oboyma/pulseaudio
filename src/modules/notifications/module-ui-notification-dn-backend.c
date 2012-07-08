@@ -30,6 +30,8 @@
 #include <pulsecore/core.h>
 #include <pulsecore/dbus-shared.h>
 #include <pulsecore/dbus-util.h>
+#include <pulsecore/hashmap.h>
+#include <pulsecore/idxset.h>
 #include <pulsecore/llist.h>
 
 #include "notification-backend.h"
@@ -48,6 +50,7 @@ struct backend_userdata {
     char *app_icon;
 
     pa_dbus_connection *conn;
+    pa_hashmap* displaying;
     PA_LLIST_HEAD(pa_dbus_pending, pending);
 };
 
@@ -56,11 +59,81 @@ struct module_userdata {
     pa_ui_notification_backend *backend;
 };
 
+static pa_dbus_pending* pa_dbus_send_message(
+    DBusConnection *conn,
+    DBusMessage *msg,
+    DBusPendingCallNotifyFunction func,
+    void *context_data,
+    void *call_data) {
+
+    pa_dbus_pending *p;
+    DBusPendingCall *pending;
+
+    pa_assert(conn);
+    pa_assert(msg);
+
+    pa_assert_se(dbus_connection_send_with_reply(conn, msg, &pending, -1));
+
+    /* TODO: pending != NULL */
+
+    p = pa_dbus_pending_new(conn, msg, pending, context_data, call_data);
+    dbus_pending_call_set_notify(pending, func, p, NULL);
+
+    return p;
+}
+
+static void send_notification_reply(DBusPendingCall *pending, void *userdata) {
+    DBusError err;
+    DBusMessage *msg;
+    pa_ui_notification_backend *backend;
+    pa_ui_notification *notification;
+    pa_dbus_pending *p;
+    struct backend_userdata *u;
+    int *dbus_notification_id;
+
+    pa_assert(pending);
+
+    dbus_error_init(&err);
+
+    pa_assert_se(p = userdata);
+    pa_assert_se(backend = p->context_data);
+    pa_assert_se(notification = p->call_data);
+    pa_assert_se(u = backend->userdata);
+    pa_assert_se(msg = dbus_pending_call_steal_reply(pending));
+
+    dbus_notification_id = pa_xnew(int, 1);
+
+    if (dbus_message_is_error(msg, DBUS_ERROR_SERVICE_UNKNOWN)) {
+        pa_log_debug("No Notifications server registered.");
+
+        /* TODO: notification reply error */
+
+        goto finish;
+    }
+
+    if (dbus_message_get_type(msg) == DBUS_MESSAGE_TYPE_ERROR) {
+        pa_log_error("org.freedesktop.Notifications.Notify() failed: %s: %s", dbus_message_get_error_name(msg), pa_dbus_get_error_message(msg));
+        goto finish;
+    }
+
+    if(!dbus_message_get_args(msg, &err, DBUS_TYPE_UINT32, dbus_notification_id, DBUS_TYPE_INVALID)) {
+        pa_log_error("Failed to parse org.freedesktop.Notifications.Notify(): %s", err.message);
+        goto finish;
+    }
+
+    pa_hashmap_put(u->displaying, notification, dbus_notification_id);
+
+finish:
+    dbus_message_unref(msg);
+
+    PA_LLIST_REMOVE(pa_dbus_pending, u->pending, p);
+    pa_dbus_pending_free(p);
+}
+
 static void send_notification(pa_ui_notification_backend *b, pa_ui_notification *n) {
-    DBusConnection* conn;
-    DBusMessage* msg;
+    DBusConnection *conn;
+    DBusMessage *msg;
     DBusMessageIter args, dict_iter;
-    DBusPendingCall* pending;
     pa_dbus_pending *p;
     struct backend_userdata *u;
 
@@ -87,16 +160,8 @@ static void send_notification(pa_ui_notification_backend *b, pa_ui_notification 
 
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_INT32, (void *) &n->expire_timeout));
 
-    pa_assert_se(dbus_connection_send_with_reply(conn, msg, &pending, -1));
-
+    p = pa_dbus_send_message(conn, msg, send_notification_reply, b, n);
     pa_log_debug("D-Bus message sent.");
-
-    /* TODO: pending != NULL */
-
-    dbus_connection_flush(conn);
-    p = pa_dbus_pending_new(conn, msg, pending, NULL, NULL);
-
-    /* TODO: set callback */
 
     PA_LLIST_PREPEND(pa_dbus_pending, u->pending, p);
 }
@@ -122,6 +187,7 @@ int pa__init(pa_module*m) {
     u->app_name = "PulseAudio";
     u->app_icon = "";
     u->conn = pa_dbus_bus_get(m->core, DBUS_BUS_SESSION, &err);
+    u->displaying = pa_hashmap_new(pa_idxset_trivial_hash_func, pa_idxset_trivial_compare_func);
 
     /* TODO: error checking */
 
@@ -144,6 +210,14 @@ int pa__init(pa_module*m) {
     }
 }
 
+static void displaying_notifications_cancel(pa_hashmap *displaying) {
+
+}
+
+static void pending_notifications_cancel(pa_dbus_pending **pending) {
+
+}
+
 void pa__done(pa_module*m) {
     pa_ui_notification_backend *b;
     struct backend_userdata *u;
@@ -163,8 +237,13 @@ void pa__done(pa_module*m) {
         u = b->userdata;
 
         if(u) {
-            pa_dbus_free_pending_list(&u->pending);
             pa_dbus_connection_unref(u->conn);
+
+            displaying_notifications_cancel(u->displaying);
+            pa_hashmap_free(u->displaying, NULL, NULL);
+
+            pending_notifications_cancel(&u->pending);
+            pa_dbus_free_pending_list(&u->pending); /* TODO: reply cb: cancelled */
         }
 
         pa_xfree(u);
