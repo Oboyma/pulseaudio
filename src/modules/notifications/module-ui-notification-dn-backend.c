@@ -51,7 +51,9 @@ struct backend_userdata {
 
     pa_dbus_connection *conn;
     pa_hashmap* displaying;
-    PA_LLIST_HEAD(pa_dbus_pending, pending);
+    pa_idxset* cancelling;
+    PA_LLIST_HEAD(pa_dbus_pending, pending_send);
+    PA_LLIST_HEAD(pa_dbus_pending, pending_cancel);
 };
 
 struct module_userdata {
@@ -82,14 +84,13 @@ static pa_dbus_pending* pa_dbus_send_message(
     return p;
 }
 
-static void send_notification_reply(DBusPendingCall *pending, void *userdata) {
+static void cancel_notification_reply(DBusPendingCall *pending, void *userdata) {
     DBusError err;
     DBusMessage *msg;
     pa_ui_notification_backend *backend;
     pa_ui_notification *notification;
     pa_dbus_pending *p;
     struct backend_userdata *u;
-    int *dbus_notification_id;
 
     pa_assert(pending);
 
@@ -101,7 +102,66 @@ static void send_notification_reply(DBusPendingCall *pending, void *userdata) {
     pa_assert_se(u = backend->userdata);
     pa_assert_se(msg = dbus_pending_call_steal_reply(pending));
 
-    dbus_notification_id = pa_xnew(int, 1);
+    if (dbus_message_is_error(msg, DBUS_ERROR_SERVICE_UNKNOWN)) {
+        pa_log_debug("No Notifications server registered.");
+
+        /* TODO: notification reply error */
+
+        goto finish;
+    }
+
+    if (dbus_message_get_type(msg) == DBUS_MESSAGE_TYPE_ERROR) {
+        pa_log_error("org.freedesktop.Notifications.CancelNotification() failed: %s: %s", dbus_message_get_error_name(msg), pa_dbus_get_error_message(msg));
+        goto finish;
+    }
+
+    /* TODO: notificatioin reply cancel */
+finish:
+    dbus_message_unref(msg);
+
+    PA_LLIST_REMOVE(pa_dbus_pending, u->pending_cancel, p);
+    pa_dbus_pending_free(p);
+}
+
+static inline void cancel_notification_dbus(pa_ui_notification_backend *backend, pa_ui_notification *notification, unsigned *dbus_notification_id) {
+    DBusConnection *conn;
+    DBusMessage *msg;
+    pa_dbus_pending *p;
+    struct backend_userdata *u;
+
+    u = backend->userdata;
+
+    conn = pa_dbus_connection_get(u->conn);
+    msg = dbus_message_new_method_call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "CloseNotification");
+    pa_assert_se(dbus_message_append_args(msg, DBUS_TYPE_UINT32, dbus_notification_id, DBUS_TYPE_INVALID));
+
+    p = pa_dbus_send_message(conn, msg, cancel_notification_reply, backend, notification);
+
+    PA_LLIST_PREPEND(pa_dbus_pending, u->pending_cancel, p);
+
+    pa_xfree(dbus_notification_id);
+}
+
+static void send_notification_reply(DBusPendingCall *pending, void *userdata) {
+    DBusError err;
+    DBusMessage *msg;
+    pa_ui_notification_backend *backend;
+    pa_ui_notification *notification;
+    pa_dbus_pending *p;
+    struct backend_userdata *u;
+    unsigned *dbus_notification_id;
+
+    pa_assert(pending);
+
+    dbus_error_init(&err);
+
+    pa_assert_se(p = userdata);
+    pa_assert_se(backend = p->context_data);
+    pa_assert_se(notification = p->call_data);
+    pa_assert_se(u = backend->userdata);
+    pa_assert_se(msg = dbus_pending_call_steal_reply(pending));
+
+    dbus_notification_id = pa_xnew(unsigned, 1);
 
     if (dbus_message_is_error(msg, DBUS_ERROR_SERVICE_UNKNOWN)) {
         pa_log_debug("No Notifications server registered.");
@@ -121,12 +181,16 @@ static void send_notification_reply(DBusPendingCall *pending, void *userdata) {
         goto finish;
     }
 
-    pa_hashmap_put(u->displaying, notification, dbus_notification_id);
+    if (pa_idxset_remove_by_data(u->cancelling, notification, NULL)) {
+        cancel_notification_dbus(backend, notification, dbus_notification_id);
+    } else {
+        pa_hashmap_put(u->displaying, notification, dbus_notification_id);
+    }
 
 finish:
     dbus_message_unref(msg);
 
-    PA_LLIST_REMOVE(pa_dbus_pending, u->pending, p);
+    PA_LLIST_REMOVE(pa_dbus_pending, u->pending_send, p);
     pa_dbus_pending_free(p);
 }
 
@@ -163,11 +227,20 @@ static void send_notification(pa_ui_notification_backend *b, pa_ui_notification 
     p = pa_dbus_send_message(conn, msg, send_notification_reply, b, n);
     pa_log_debug("D-Bus message sent.");
 
-    PA_LLIST_PREPEND(pa_dbus_pending, u->pending, p);
+    PA_LLIST_PREPEND(pa_dbus_pending, u->pending_send, p);
 }
 
-static void cancel_notification(pa_ui_notification_backend *b, pa_ui_notification *n) {
-    /* TODO */
+static void cancel_notification(pa_ui_notification_backend *backend, pa_ui_notification *notification) {
+    struct backend_userdata *u;
+    unsigned *dbus_notification_id;
+
+    u = backend->userdata;
+
+    if ((dbus_notification_id = pa_hashmap_remove(u->displaying, notification))) {
+        cancel_notification_dbus(backend, notification, dbus_notification_id);
+    } else {
+        pa_idxset_put(u->cancelling, notification, NULL);
+    }
 }
 
 int pa__init(pa_module*m) {
@@ -188,10 +261,12 @@ int pa__init(pa_module*m) {
     u->app_icon = "";
     u->conn = pa_dbus_bus_get(m->core, DBUS_BUS_SESSION, &err);
     u->displaying = pa_hashmap_new(pa_idxset_trivial_hash_func, pa_idxset_trivial_compare_func);
+    u->cancelling = pa_idxset_new(pa_idxset_trivial_hash_func, pa_idxset_trivial_compare_func);
 
     /* TODO: error checking */
 
-    PA_LLIST_HEAD_INIT(pa_dbus_pending, u->pending);
+    PA_LLIST_HEAD_INIT(pa_dbus_pending, u->pending_send);
+    PA_LLIST_HEAD_INIT(pa_dbus_pending, u->pending_cancel);
 
     backend->send_notification = send_notification;
     backend->cancel_notification = cancel_notification;
@@ -210,12 +285,34 @@ int pa__init(pa_module*m) {
     }
 }
 
-static void displaying_notifications_cancel(pa_hashmap *displaying) {
+static void displaying_notifications_cancel(pa_ui_notification_backend *backend) {
+    void *state;
+    pa_ui_notification *notification;
+    unsigned *dbus_notification_id;
 
+    struct backend_userdata *u;
+
+    pa_assert(backend);
+    pa_assert(u = backend->userdata);
+
+    PA_HASHMAP_FOREACH_KEY(dbus_notification_id, notification, u->displaying, state) {
+        pa_hashmap_remove(u->displaying, notification);
+        cancel_notification_dbus(backend, notification, dbus_notification_id);
+    }
 }
 
-static void pending_notifications_cancel(pa_dbus_pending **pending) {
+static void pending_notifications_cancel(pa_dbus_pending **p) {
+    pa_dbus_pending *i;
 
+    pa_assert(p);
+
+    while ((i = *p)) {
+        PA_LLIST_REMOVE(pa_dbus_pending, *p, i);
+
+        /* TODO: notification reply cancel */
+
+        pa_dbus_pending_free(i);
+    }
 }
 
 void pa__done(pa_module*m) {
@@ -239,11 +336,12 @@ void pa__done(pa_module*m) {
         if(u) {
             pa_dbus_connection_unref(u->conn);
 
-            displaying_notifications_cancel(u->displaying);
+            displaying_notifications_cancel(b);
             pa_hashmap_free(u->displaying, NULL, NULL);
+            pa_idxset_free(u->cancelling, NULL, NULL);
 
-            pending_notifications_cancel(&u->pending);
-            pa_dbus_free_pending_list(&u->pending); /* TODO: reply cb: cancelled */
+            pending_notifications_cancel(&u->pending_send);
+            pending_notifications_cancel(&u->pending_cancel);
         }
 
         pa_xfree(u);
