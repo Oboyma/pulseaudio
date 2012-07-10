@@ -80,4 +80,8 @@ void* pa_hashmap_last(pa_hashmap *h);
 #define PA_HASHMAP_FOREACH_BACKWARDS(e, h, state) \
     for ((state) = NULL, (e) = pa_hashmap_iterate_backwards((h), &(state), NULL); (e); (e) = pa_hashmap_iterate_backwards((h), &(state), NULL))
 
+/* A macro to ease iteration through all entries, using the key as well as the value */
+#define PA_HASHMAP_FOREACH_KEY(e, k, h, state) \
+    for ((state) = NULL, (e) = pa_hashmap_iterate((h), &(state), &(k)); (e); (e) = pa_hashmap_iterate((h), &(state), &(k)))
+
 #endif
