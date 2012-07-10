@@ -61,7 +61,7 @@ static pa_ui_notification_manager* pa_ui_notification_manager_new(pa_core *c) {
 static void pa_ui_notification_manager_free(pa_ui_notification_manager *m) {
     pa_assert(m);
 
-    pa_assert_se(pa_shared_remove(m->core, "ui-notification-manager"));
+    pa_assert_se(pa_shared_remove(m->core, "ui-notification-manager") >= 0);
 
     pa_xfree(m);
 }
