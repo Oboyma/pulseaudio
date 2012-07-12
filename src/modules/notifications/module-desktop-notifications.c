@@ -50,8 +50,8 @@ struct userdata {
 };
 
 static void notification_reply_cb(pa_ui_notification_reply* reply) {
-    pa_ui_notification_free(reply->source);
-    /* TODO: free reply */
+    pa_log_debug("%d", reply->type);
+    pa_ui_notification_reply_free(reply);
 }
 
 static pa_hook_result_t card_put_cb(pa_core *c, pa_card *card, void *userdata) {
@@ -75,11 +75,21 @@ static pa_hook_result_t card_put_cb(pa_core *c, pa_card *card, void *userdata) {
 
 int pa__init(pa_module*m) {
     struct userdata *u;
+    pa_ui_notification *n;
 
     m->userdata = u = pa_xnew(struct userdata, 1);
 
     u->card_put_slot = pa_hook_connect(&m->core->hooks[PA_CORE_HOOK_CARD_PUT], PA_HOOK_LATE, (pa_hook_cb_t) card_put_cb, u);
     u->manager = pa_ui_notification_manager_get(m->core);
+
+    n = pa_ui_notification_new(notification_reply_cb, NULL);
+    n->summary = "Desktop Notifications module has been loaded.";
+    n->body = "This is just an example notification. It won't be here when this module is finished, but it saves me from having to plug in and out a card.";
+
+    pa_hashmap_put(n->actions, "ok", "OK");
+    pa_hashmap_put(n->actions, "cancel", "Cancel");
+
+    pa_ui_notification_manager_send(u->manager, n);
 
     return 0;
 }
