@@ -25,26 +25,40 @@
 
 #include <pulse/xmalloc.h>
 
+#include <pulsecore/hashmap.h>
+
 #include "notification.h"
 #include "notification-backend.h"
 
 pa_ui_notification* pa_ui_notification_new(pa_ui_notification_reply_cb_t reply_cb, void *userdata) {
-    pa_ui_notification *n = pa_xnew(pa_ui_notification, 1);
+    pa_ui_notification *n = pa_xnew0(pa_ui_notification, 1);
 
-    n->replaces_id = 0;
     n->summary = "";
     n->body = "";
-    n->actions = NULL;
-    n->num_actions = 0; /* TODO: actions */
     n->expire_timeout = -1;
-
+    n->actions = pa_hashmap_new(pa_idxset_string_hash_func, pa_idxset_string_compare_func);
     n->handle_reply = reply_cb;
     n->userdata = userdata;
-
 
     return n;
 }
 
 void pa_ui_notification_free(pa_ui_notification *n) {
+    pa_hashmap_free(n->actions, NULL, NULL);
     pa_xfree(n);
+}
+
+pa_ui_notification_reply* pa_ui_notification_reply_new(pa_ui_notification_reply_type_t type, pa_ui_notification *source, char *action_key) {
+    pa_ui_notification_reply *reply = pa_xnew0(pa_ui_notification_reply, 1);
+
+    reply->type = type;
+    reply->source = source;
+    reply->action_key = action_key;
+
+    return reply;
+}
+
+void pa_ui_notification_reply_free(pa_ui_notification_reply *reply) {
+    pa_ui_notification_free(reply->source);
+    pa_xfree(reply);
 }

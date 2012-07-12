@@ -20,7 +20,7 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
   USA.
 ***/
-#include <stdint.h>
+#include <pulsecore/hashmap.h>
 
 typedef struct pa_ui_notification pa_ui_notification;
 typedef struct pa_ui_notification_reply pa_ui_notification_reply;
@@ -28,22 +28,35 @@ typedef struct pa_ui_notification_reply pa_ui_notification_reply;
 typedef void(*pa_ui_notification_reply_cb_t)(pa_ui_notification_reply *reply);
 
 struct pa_ui_notification {
-    uint32_t replaces_id;
+    unsigned replaces_id;
     char *summary;
     char *body;
-    char **actions;
-    size_t num_actions;
-    int32_t expire_timeout;
+    pa_hashmap *actions;
+    int expire_timeout;
 
     pa_ui_notification_reply_cb_t handle_reply;
     void* userdata;
 };
 
+typedef enum pa_ui_notification_reply_type {
+    PA_UI_NOTIFCATION_REPLY_ERROR,
+    PA_UI_NOTIFCATION_REPLY_CANCELLED,
+    PA_UI_NOTIFCATION_REPLY_DISMISSED,
+    PA_UI_NOTIFCATION_REPLY_EXPIRED,
+    PA_UI_NOTIFCATION_REPLY_ACTION_INVOKED,
+    PA_UI_NOTIFCATION_REPLY_MAX
+} pa_ui_notification_reply_type_t;
+
 struct pa_ui_notification_reply {
+    pa_ui_notification_reply_type_t type;
     pa_ui_notification *source;
+    char *action_key;
 };
 
 pa_ui_notification* pa_ui_notification_new(pa_ui_notification_reply_cb_t reply_cb, void *userdata);
 void pa_ui_notification_free(pa_ui_notification *notification);
+
+pa_ui_notification_reply* pa_ui_notification_reply_new(pa_ui_notification_reply_type_t type, pa_ui_notification *source, char *action_key);
+void pa_ui_notification_reply_free(pa_ui_notification_reply *reply);
 
 #endif
