@@ -53,7 +53,8 @@ struct backend_userdata {
     pa_hashmap* displaying;
     pa_idxset* cancelling;
     PA_LLIST_HEAD(pa_dbus_pending, pending_send);
-    PA_LLIST_HEAD(pa_dbus_pending, pending_cancel);
+
+    bool filter_set;
 };
 
 struct module_userdata {
@@ -79,12 +80,14 @@ static pa_dbus_pending* pa_dbus_send_message(
     /* TODO: pending != NULL */
 
     p = pa_dbus_pending_new(conn, msg, pending, context_data, call_data);
-    dbus_pending_call_set_notify(pending, func, p, NULL);
+
+    if(func)
+        dbus_pending_call_set_notify(pending, func, p, NULL);
 
     return p;
 }
 
-static void cancel_notification_reply(DBusPendingCall *pending, void *userdata) {
+/*static void cancel_notification_reply(DBusPendingCall *pending, void *userdata) {
     DBusError err;
     DBusMessage *msg;
     pa_ui_notification_backend *backend;
@@ -105,23 +108,21 @@ static void cancel_notification_reply(DBusPendingCall *pending, void *userdata) 
     if (dbus_message_is_error(msg, DBUS_ERROR_SERVICE_UNKNOWN)) {
         pa_log_debug("No Notifications server registered.");
 
-        /* TODO: notification reply error */
-
         goto finish;
     }
 
     if (dbus_message_get_type(msg) == DBUS_MESSAGE_TYPE_ERROR) {
         pa_log_error("org.freedesktop.Notifications.CancelNotification() failed: %s: %s", dbus_message_get_error_name(msg), pa_dbus_get_error_message(msg));
+
         goto finish;
     }
 
-    /* TODO: notificatioin reply cancel */
 finish:
     dbus_message_unref(msg);
 
     PA_LLIST_REMOVE(pa_dbus_pending, u->pending_cancel, p);
     pa_dbus_pending_free(p);
-}
+} */
 
 static inline void cancel_notification_dbus(pa_ui_notification_backend *backend, pa_ui_notification *notification, unsigned *dbus_notification_id) {
     DBusConnection *conn;
@@ -135,9 +136,10 @@ static inline void cancel_notification_dbus(pa_ui_notification_backend *backend,
     msg = dbus_message_new_method_call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "CloseNotification");
     pa_assert_se(dbus_message_append_args(msg, DBUS_TYPE_UINT32, dbus_notification_id, DBUS_TYPE_INVALID));
 
-    p = pa_dbus_send_message(conn, msg, cancel_notification_reply, backend, notification);
+    dbus_message_set_no_reply(msg, TRUE);
+    p = pa_dbus_send_message(conn, msg, NULL, NULL, NULL);
 
-    PA_LLIST_PREPEND(pa_dbus_pending, u->pending_cancel, p);
+    pa_dbus_pending_free(p);
 
     pa_xfree(dbus_notification_id);
 }
@@ -166,23 +168,31 @@ static void send_notification_reply(DBusPendingCall *pending, void *userdata) {
     if (dbus_message_is_error(msg, DBUS_ERROR_SERVICE_UNKNOWN)) {
         pa_log_debug("No Notifications server registered.");
 
-        /* TODO: notification reply error */
+        notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
 
         goto finish;
     }
 
     if (dbus_message_get_type(msg) == DBUS_MESSAGE_TYPE_ERROR) {
         pa_log_error("org.freedesktop.Notifications.Notify() failed: %s: %s", dbus_message_get_error_name(msg), pa_dbus_get_error_message(msg));
+
+        notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
+
         goto finish;
     }
 
     if(!dbus_message_get_args(msg, &err, DBUS_TYPE_UINT32, dbus_notification_id, DBUS_TYPE_INVALID)) {
         pa_log_error("Failed to parse org.freedesktop.Notifications.Notify(): %s", err.message);
+
+        notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
+
         goto finish;
     }
 
     if (pa_idxset_remove_by_data(u->cancelling, notification, NULL)) {
         cancel_notification_dbus(backend, notification, dbus_notification_id);
+
+        notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
     } else {
         pa_hashmap_put(u->displaying, notification, dbus_notification_id);
     }
@@ -197,8 +207,10 @@ finish:
 static void send_notification(pa_ui_notification_backend *b, pa_ui_notification *n) {
     DBusConnection *conn;
     DBusMessage *msg;
-    DBusMessageIter args, dict_iter;
+    DBusMessageIter args, dict_iter, array_iter;
     pa_dbus_pending *p;
+    char *key, *value;
+    void *state;
     struct backend_userdata *u;
 
     u = b->userdata;
@@ -215,7 +227,14 @@ static void send_notification(pa_ui_notification_backend *b, pa_ui_notification 
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->summary));
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->body));
 
-    pa_dbus_append_basic_array(&args, DBUS_TYPE_STRING, (void *) n->actions, n->num_actions);
+    pa_assert_se(dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "s", &array_iter));
+
+    PA_HASHMAP_FOREACH_KEY(value, key, n->actions, state) {
+        pa_assert_se(dbus_message_iter_append_basic(&array_iter, DBUS_TYPE_STRING, (void *) &key));
+        pa_assert_se(dbus_message_iter_append_basic(&array_iter, DBUS_TYPE_STRING, (void *) &value));
+    }
+
+    pa_assert_se(dbus_message_iter_close_container(&args, &array_iter));
 
 
     pa_assert_se(dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "{sv}", &dict_iter));
@@ -238,9 +257,90 @@ static void cancel_notification(pa_ui_notification_backend *backend, pa_ui_notif
 
     if ((dbus_notification_id = pa_hashmap_remove(u->displaying, notification))) {
         cancel_notification_dbus(backend, notification, dbus_notification_id);
+
+        notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_CANCELLED, notification, NULL));
     } else {
         pa_idxset_put(u->cancelling, notification, NULL);
     }
+}
+
+static DBusHandlerResult signal_cb(DBusConnection *conn, DBusMessage *msg, void *userdata) {
+    DBusError err;
+    pa_ui_notification_backend *backend;
+    pa_ui_notification *notification;
+    struct backend_userdata *u;
+    void *state;
+
+    unsigned dbus_notification_id, reason, *id;
+    char *action_key;
+
+    pa_assert(conn);
+    pa_assert(msg);
+    pa_assert_se(backend = userdata);
+
+   /*  pa_log_debug("Message received: %s.%s", dbus_message_get_interface(msg), dbus_message_get_member(msg)); */
+
+    u = backend->userdata;
+
+    dbus_error_init(&err);
+    if(dbus_message_is_signal(msg, "org.freedesktop.Notifications", "NotificationClosed")) {
+        if (!dbus_message_get_args(msg, &err, DBUS_TYPE_UINT32, &dbus_notification_id, DBUS_TYPE_UINT32, &reason, DBUS_TYPE_INVALID)) {
+            pa_log_error("Failed to parse org.freedesktop.Notifications.NotificationClosed: %s.", err.message);
+            goto finish;
+        }
+
+        /* The assumption here is that if an action was invoked, it will have
+           already been processed since the ActionInvoked signal was emitted
+           first. That might not always be the case. */
+        PA_HASHMAP_FOREACH_KEY(id, notification, u->displaying, state) {
+            if (*id == dbus_notification_id) {
+                switch(reason) {
+                case 1: /* expired */
+                    notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_EXPIRED, notification, NULL));
+                    break;
+
+                case 2: /* dismissed */
+                    /* what if ActionInvoked emitted after NotificationClosed */
+                    notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_DISMISSED, notification, NULL));
+                    break;
+
+                case 3: /* CloseNotification */
+                    /* handled when CloseNotification was called */
+                    break;
+
+                case 4: /* undefined/reserved */
+                default:
+                    notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
+                    break;
+                }
+
+                pa_xfree(id);
+                pa_hashmap_remove(u->displaying, notification);
+
+                break;
+            }
+        }
+    } else if (dbus_message_is_signal(msg, "org.freedesktop.Notifications", "ActionInvoked")) {
+        if (!dbus_message_get_args(msg, &err, DBUS_TYPE_UINT32, &dbus_notification_id, DBUS_TYPE_STRING, &action_key, DBUS_TYPE_INVALID)) {
+            pa_log_error("Failed to parse org.freedesktop.Notifications.ActionInvoked: %s.", err.message);
+            goto finish;
+        }
+
+        /* pa_log_debug("org.freedesktop.Notifications.ActionInvoked(%u, %s)", dbus_notification_id, action_key); */
+        PA_HASHMAP_FOREACH_KEY(id, notification, u->displaying, state) {
+            if (*id == dbus_notification_id) {
+                notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ACTION_INVOKED, notification, action_key));
+            }
+
+            pa_xfree(id);
+            pa_hashmap_remove(u->displaying, notification);
+        }
+    }
+
+finish:
+    dbus_error_free(&err);
+
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
 int pa__init(pa_module*m) {
@@ -252,7 +352,7 @@ int pa__init(pa_module*m) {
 
     pa_assert(m);
 
-    backend = pa_xnew(pa_ui_notification_backend, 1);
+    backend = pa_xnew0(pa_ui_notification_backend, 1);
     backend->userdata = u = pa_xnew(struct backend_userdata, 1);
 
     dbus_error_init(&err);
@@ -266,7 +366,6 @@ int pa__init(pa_module*m) {
     /* TODO: error checking */
 
     PA_LLIST_HEAD_INIT(pa_dbus_pending, u->pending_send);
-    PA_LLIST_HEAD_INIT(pa_dbus_pending, u->pending_cancel);
 
     backend->send_notification = send_notification;
     backend->cancel_notification = cancel_notification;
@@ -277,12 +376,24 @@ int pa__init(pa_module*m) {
     mu->manager = manager = pa_ui_notification_manager_get(m->core);
     mu->backend = backend;
 
+    if (!dbus_connection_add_filter(pa_dbus_connection_get(u->conn), signal_cb, backend, NULL)) {
+        pa_log_error("Failed to add filter function.");
+        goto fail;
+    }
+    u->filter_set = true;
+
+    if (pa_dbus_add_matches(pa_dbus_connection_get(u->conn), &err, "type='signal',sender='org.freedesktop.Notifications',interface='org.freedesktop.Notifications',path='/org/freedesktop/Notifications'", NULL) < 0) {
+        pa_log("Failed to add D-Bus matches: %s", err.message);
+        goto fail;
+    }
+
+
     if(pa_ui_notification_manager_register_backend(manager, backend) >= 0)
         return 0;
-    else {
-        pa__done(m);
-        return -1;
-    }
+
+fail:
+    pa__done(m);
+    return -1;
 }
 
 static void displaying_notifications_cancel(pa_ui_notification_backend *backend) {
@@ -303,48 +414,55 @@ static void displaying_notifications_cancel(pa_ui_notification_backend *backend)
 
 static void pending_notifications_cancel(pa_dbus_pending **p) {
     pa_dbus_pending *i;
+    pa_ui_notification *notification;
 
     pa_assert(p);
 
     while ((i = *p)) {
         PA_LLIST_REMOVE(pa_dbus_pending, *p, i);
 
-        /* TODO: notification reply cancel */
+        notification = i->call_data;
+        notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_CANCELLED, notification, NULL));
 
         pa_dbus_pending_free(i);
     }
 }
 
 void pa__done(pa_module*m) {
-    pa_ui_notification_backend *b;
+    pa_ui_notification_backend *backend;
     struct backend_userdata *u;
     struct module_userdata *mu;
 
     pa_assert(m);
 
-    b = NULL;
+    backend = NULL;
     if((mu = m->userdata)) {
-        if((b = pa_ui_notification_manager_get_backend(mu->manager)) == mu->backend)
+        if((backend = pa_ui_notification_manager_get_backend(mu->manager)) == mu->backend)
             pa_ui_notification_manager_unregister_backend(mu->manager);
 
         pa_ui_notification_manager_unref(mu->manager);
     }
 
-    if(b) {
-        u = b->userdata;
+    if(backend) {
+        u = backend->userdata;
 
         if(u) {
             pa_dbus_connection_unref(u->conn);
 
-            displaying_notifications_cancel(b);
+            displaying_notifications_cancel(backend);
             pa_hashmap_free(u->displaying, NULL, NULL);
             pa_idxset_free(u->cancelling, NULL, NULL);
 
             pending_notifications_cancel(&u->pending_send);
-            pending_notifications_cancel(&u->pending_cancel);
+
+            if(u->filter_set) {
+                dbus_connection_remove_filter(pa_dbus_connection_get(u->conn), signal_cb, backend);
+            }
+
+            pa_dbus_remove_matches(pa_dbus_connection_get(u->conn), "type='signal',sender='org.freedesktop.Notifications',interface='org.freedesktop.Notifications',path='/org/freedesktop/Notifications'", NULL);
         }
 
         pa_xfree(u);
-        pa_xfree(b);
+        pa_xfree(backend);
     }
 }
