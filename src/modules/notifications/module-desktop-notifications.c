@@ -23,12 +23,17 @@
 #include <config.h>
 #endif
 
+#include <errno.h>
+#include <string.h>
+
 #include <pulse/proplist.h>
 #include <pulse/xmalloc.h>
 
 #include <pulsecore/card.h>
 #include <pulsecore/core.h>
+#include <pulsecore/core-error.h>
 #include <pulsecore/core-util.h>
+#include <pulsecore/database.h>
 #include <pulsecore/log.h>
 #include <pulsecore/macro.h>
 #include <pulsecore/module.h>
@@ -46,52 +51,155 @@ PA_MODULE_LOAD_ONCE(TRUE);
 
 struct userdata {
     pa_hook_slot *card_put_slot;
+    pa_database *database;
     pa_ui_notification_manager *manager;
 };
 
+struct notification_userdata {
+    struct userdata *u;
+    pa_card *card;
+};
+
+static void card_set_default(pa_card *card, pa_core *core) {
+    pa_log_debug("Setting %s as default.", pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION));
+}
+
+static void card_save(pa_card *card, pa_database *database, bool use) {
+    pa_datum key, data;
+    char *card_desc;
+
+    pa_assert(card);
+    pa_assert(database);
+
+    key.data = card_desc = pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION);
+    key.size = strlen(card_desc);
+
+    data.data = pa_xnew(bool, 1);
+    data.size = sizeof(bool);
+
+    *(bool*)(data.data) = use;
+
+    pa_assert_se(pa_database_set(database, &key, &data, true) == 0);
+
+    pa_xfree(data.data);
+}
+
+static bool* card_load(pa_card *card, pa_database *database) {
+    pa_datum key, data;
+    char *card_desc;
+
+    pa_assert(card);
+    pa_assert(database);
+
+    key.data = card_desc = pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION);
+    key.size = strlen(card_desc);
+
+    if(pa_database_get(database, &key, &data) == NULL)
+        return NULL;
+    else
+        return (bool*) data.data;
+
+    /* TODO: who frees data.data? */
+}
+
 static void notification_reply_cb(pa_ui_notification_reply* reply) {
-    pa_log_debug("%d", reply->type);
+    struct notification_userdata *nu;
+
+    pa_assert(reply);
+
+    nu = reply->source->userdata;
+
+    pa_log_debug("Got notification reply for %s.", pa_proplist_gets(nu->card->proplist, PA_PROP_DEVICE_DESCRIPTION));
+
+    switch(reply->type) {
+    case PA_UI_NOTIFCATION_REPLY_ERROR:
+        pa_log_error("An error has occured with the notification for %s", pa_proplist_gets(nu->card->proplist, PA_PROP_DEVICE_DESCRIPTION));
+
+    case PA_UI_NOTIFCATION_REPLY_CANCELLED:
+    case PA_UI_NOTIFCATION_REPLY_DISMISSED:
+    case PA_UI_NOTIFCATION_REPLY_EXPIRED:
+        break;
+
+    case PA_UI_NOTIFCATION_REPLY_ACTION_INVOKED:
+        if (pa_streq(reply->action_key, "0")) {
+            card_set_default(nu->card, NULL); /* TODO: get the core here */
+            card_save(nu->card, nu->u->database, true);
+        } else if (pa_streq(reply->action_key, "1")) {
+            card_save(nu->card, nu->u->database, false);
+        }
+
+        break;
+    }
+
+    pa_xfree(nu);
     pa_ui_notification_reply_free(reply);
 }
 
-static pa_hook_result_t card_put_cb(pa_core *c, pa_card *card, void *userdata) {
+static pa_hook_result_t card_put_cb(pa_core *core, pa_card *card, void *userdata) {
     char *card_name;
     pa_ui_notification *n;
     struct userdata *u;
+    struct notification_userdata *nu;
+    bool *use_card;
+
+    pa_assert(core);
+    pa_assert(card);
+    pa_assert(userdata);
 
     u = userdata;
-    card_name = pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION);
-    pa_log_debug("Card detected: %s.", card_name);
 
-    n = pa_ui_notification_new(notification_reply_cb, card);
-    n->summary = "A new card has been detected.";
-    n->body = pa_sprintf_malloc("%s has been detected. Would you like to set it as default?", card_name);
-    /* TODO: free body? */
+    if((use_card = card_load(card, u->database)) == NULL) {
+        nu = pa_xnew(struct notification_userdata, 1);
 
-    pa_ui_notification_manager_send(u->manager, n);
+        nu->u = u;
+        nu->card = card;
+        card_name = pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION);
+        pa_log_debug("Card detected: %s.", card_name);
+
+        n = pa_ui_notification_new(notification_reply_cb, nu);
+        n->summary = "A new card has been detected.";
+        n->body = pa_sprintf_malloc("%s has been detected. Would you like to set it as default?", card_name);
+        /* TODO: free body? */
+
+        pa_hashmap_put(n->actions, "0", "Yes");
+        pa_hashmap_put(n->actions, "1", "No");
+
+        pa_ui_notification_manager_send(nu->u->manager, n);
+    } else if (*use_card)
+        card_set_default(card, core);
+
+    if(use_card)
+        pa_xfree(use_card);
 
     return PA_HOOK_OK;
 }
 
 int pa__init(pa_module*m) {
     struct userdata *u;
-    pa_ui_notification *n;
+    char *fname;
 
     m->userdata = u = pa_xnew(struct userdata, 1);
+
+    if (!(fname = pa_state_path("ui-seen-cards", FALSE)))
+        goto fail;
+
+    if (!(u->database = pa_database_open(fname, TRUE))) {
+        pa_log_error("Failed to open volume database '%s': %s", fname, pa_cstrerror(errno));
+        goto fail;
+    }
 
     u->card_put_slot = pa_hook_connect(&m->core->hooks[PA_CORE_HOOK_CARD_PUT], PA_HOOK_LATE, (pa_hook_cb_t) card_put_cb, u);
     u->manager = pa_ui_notification_manager_get(m->core);
 
-    n = pa_ui_notification_new(notification_reply_cb, NULL);
-    n->summary = "Desktop Notifications module has been loaded.";
-    n->body = "This is just an example notification. It won't be here when this module is finished, but it saves me from having to plug in and out a card.";
-
-    pa_hashmap_put(n->actions, "ok", "OK");
-    pa_hashmap_put(n->actions, "cancel", "Cancel");
-
-    pa_ui_notification_manager_send(u->manager, n);
-
     return 0;
+
+fail:
+    if (fname)
+        pa_xfree(fname);
+
+    pa__done(m);
+
+    return -1;
 }
 
 void pa__done(pa_module*m) {
@@ -104,6 +212,9 @@ void pa__done(pa_module*m) {
 
     if (u->card_put_slot)
         pa_hook_slot_free(u->card_put_slot);
+
+    if(u->database)
+        pa_database_close(u->database);
 
     if(u->manager)
         pa_ui_notification_manager_unref(u->manager);
