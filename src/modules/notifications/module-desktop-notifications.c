@@ -136,7 +136,7 @@ static void notification_reply_cb(pa_ui_notification_reply* reply) {
 }
 
 static pa_hook_result_t card_put_cb(pa_core *core, pa_card *card, void *userdata) {
-    char *card_name;
+    char *card_name, *body;
     pa_ui_notification *n;
     struct userdata *u;
     struct notification_userdata *nu;
@@ -156,13 +156,12 @@ static pa_hook_result_t card_put_cb(pa_core *core, pa_card *card, void *userdata
         card_name = pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION);
         pa_log_debug("Card detected: %s.", card_name);
 
-        n = pa_ui_notification_new(notification_reply_cb, nu);
-        n->summary = "A new card has been detected.";
-        n->body = pa_sprintf_malloc("%s has been detected. Would you like to set it as default?", card_name);
-        /* TODO: free body? */
-
+        body = pa_sprintf_malloc("Would you like to set %s as default?", card_name);
+        n = pa_ui_notification_new(notification_reply_cb, "A new card has been connected.", body, -1, nu);
         pa_hashmap_put(n->actions, "0", "Yes");
         pa_hashmap_put(n->actions, "1", "No");
+
+        pa_xfree(body);
 
         pa_ui_notification_manager_send(nu->u->manager, n);
     } else if (*use_card)

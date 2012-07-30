@@ -168,7 +168,7 @@ static void send_notification_reply(DBusPendingCall *pending, void *userdata) {
     if (dbus_message_is_error(msg, DBUS_ERROR_SERVICE_UNKNOWN)) {
         pa_log_debug("No Notifications server registered.");
 
-        notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
+        notification->reply_cb(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
 
         goto finish;
     }
@@ -176,7 +176,7 @@ static void send_notification_reply(DBusPendingCall *pending, void *userdata) {
     if (dbus_message_get_type(msg) == DBUS_MESSAGE_TYPE_ERROR) {
         pa_log_error("org.freedesktop.Notifications.Notify() failed: %s: %s", dbus_message_get_error_name(msg), pa_dbus_get_error_message(msg));
 
-        notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
+        notification->reply_cb(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
 
         goto finish;
     }
@@ -184,7 +184,7 @@ static void send_notification_reply(DBusPendingCall *pending, void *userdata) {
     if(!dbus_message_get_args(msg, &err, DBUS_TYPE_UINT32, dbus_notification_id, DBUS_TYPE_INVALID)) {
         pa_log_error("Failed to parse org.freedesktop.Notifications.Notify(): %s", err.message);
 
-        notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
+        notification->reply_cb(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
 
         goto finish;
     }
@@ -192,7 +192,7 @@ static void send_notification_reply(DBusPendingCall *pending, void *userdata) {
     if (pa_idxset_remove_by_data(u->cancelling, notification, NULL)) {
         cancel_notification_dbus(backend, notification, dbus_notification_id);
 
-        notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
+        notification->reply_cb(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
     } else {
         pa_hashmap_put(u->displaying, notification, dbus_notification_id);
     }
@@ -209,9 +209,12 @@ static void send_notification(pa_ui_notification_backend *b, pa_ui_notification 
     DBusMessage *msg;
     DBusMessageIter args, dict_iter, array_iter;
     pa_dbus_pending *p;
+    unsigned replaces_id;
     char *key, *value;
     void *state;
     struct backend_userdata *u;
+
+    replaces_id = 0; /* match the existing notifications against the notification to be replaced */
 
     u = b->userdata;
     conn = pa_dbus_connection_get(u->conn);
@@ -222,7 +225,7 @@ static void send_notification(pa_ui_notification_backend *b, pa_ui_notification 
     dbus_message_iter_init_append(msg, &args);
 
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &u->app_name));
-    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, (void *) &n->replaces_id));
+    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, (void *) &replaces_id));
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &u->app_icon));
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->summary));
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->body));
@@ -258,7 +261,7 @@ static void cancel_notification(pa_ui_notification_backend *backend, pa_ui_notif
     if ((dbus_notification_id = pa_hashmap_remove(u->displaying, notification))) {
         cancel_notification_dbus(backend, notification, dbus_notification_id);
 
-        notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_CANCELLED, notification, NULL));
+        notification->reply_cb(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_CANCELLED, notification, NULL));
     } else {
         pa_idxset_put(u->cancelling, notification, NULL);
     }
@@ -296,12 +299,12 @@ static DBusHandlerResult signal_cb(DBusConnection *conn, DBusMessage *msg, void 
             if (*id == dbus_notification_id) {
                 switch(reason) {
                 case 1: /* expired */
-                    notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_EXPIRED, notification, NULL));
+                    notification->reply_cb(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_EXPIRED, notification, NULL));
                     break;
 
                 case 2: /* dismissed */
                     /* what if ActionInvoked emitted after NotificationClosed */
-                    notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_DISMISSED, notification, NULL));
+                    notification->reply_cb(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_DISMISSED, notification, NULL));
                     break;
 
                 case 3: /* CloseNotification */
@@ -310,7 +313,7 @@ static DBusHandlerResult signal_cb(DBusConnection *conn, DBusMessage *msg, void 
 
                 case 4: /* undefined/reserved */
                 default:
-                    notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
+                    notification->reply_cb(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL));
                     break;
                 }
 
@@ -329,7 +332,7 @@ static DBusHandlerResult signal_cb(DBusConnection *conn, DBusMessage *msg, void 
         /* pa_log_debug("org.freedesktop.Notifications.ActionInvoked(%u, %s)", dbus_notification_id, action_key); */
         PA_HASHMAP_FOREACH_KEY(id, notification, u->displaying, state) {
             if (*id == dbus_notification_id) {
-                notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ACTION_INVOKED, notification, action_key));
+                notification->reply_cb(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ACTION_INVOKED, notification, action_key));
             }
 
             pa_xfree(id);
@@ -422,7 +425,7 @@ static void pending_notifications_cancel(pa_dbus_pending **p) {
         PA_LLIST_REMOVE(pa_dbus_pending, *p, i);
 
         notification = i->call_data;
-        notification->handle_reply(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_CANCELLED, notification, NULL));
+        notification->reply_cb(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_CANCELLED, notification, NULL));
 
         pa_dbus_pending_free(i);
     }
