@@ -43,11 +43,15 @@ pa_ui_notification* pa_ui_notification_new(pa_ui_notification_reply_cb_t reply_c
     return n;
 }
 
+static void free_func(void* p, void* userdata) {
+    pa_xfree(p);
+}
+
 void pa_ui_notification_free(pa_ui_notification *n) {
     pa_xfree(n->summary);
     pa_xfree(n->body);
 
-    pa_hashmap_free(n->actions, NULL, NULL); /* TODO: correct free function? */
+    pa_hashmap_free(n->actions, free_func, NULL); /* TODO: correct free function? */
     pa_xfree(n);
 }
 

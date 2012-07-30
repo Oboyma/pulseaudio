@@ -360,8 +360,8 @@ int pa__init(pa_module*m) {
 
     dbus_error_init(&err);
 
-    u->app_name = "PulseAudio";
-    u->app_icon = "";
+    u->app_name = pa_xstrdup("PulseAudio");
+    u->app_icon = pa_xstrdup("");
     u->conn = pa_dbus_bus_get(m->core, DBUS_BUS_SESSION, &err);
     u->displaying = pa_hashmap_new(pa_idxset_trivial_hash_func, pa_idxset_trivial_compare_func);
     u->cancelling = pa_idxset_new(pa_idxset_trivial_hash_func, pa_idxset_trivial_compare_func);
@@ -389,7 +389,6 @@ int pa__init(pa_module*m) {
         pa_log("Failed to add D-Bus matches: %s", err.message);
         goto fail;
     }
-
 
     if(pa_ui_notification_manager_register_backend(manager, backend) >= 0)
         return 0;
@@ -450,8 +449,6 @@ void pa__done(pa_module*m) {
         u = backend->userdata;
 
         if(u) {
-            pa_dbus_connection_unref(u->conn);
-
             displaying_notifications_cancel(backend);
             pa_hashmap_free(u->displaying, NULL, NULL);
             pa_idxset_free(u->cancelling, NULL, NULL);
@@ -463,6 +460,10 @@ void pa__done(pa_module*m) {
             }
 
             pa_dbus_remove_matches(pa_dbus_connection_get(u->conn), "type='signal',sender='org.freedesktop.Notifications',interface='org.freedesktop.Notifications',path='/org/freedesktop/Notifications'", NULL);
+
+            pa_xfree(u->app_name);
+            pa_xfree(u->app_icon);
+            pa_dbus_connection_unref(u->conn);
         }
 
         pa_xfree(u);

@@ -71,7 +71,7 @@ static void card_save(pa_card *card, pa_database *database, bool use) {
     pa_assert(card);
     pa_assert(database);
 
-    key.data = card_desc = pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION);
+    key.data = card_desc = pa_xstrdup(pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION));
     key.size = strlen(card_desc);
 
     data.data = pa_xnew(bool, 1);
@@ -81,6 +81,7 @@ static void card_save(pa_card *card, pa_database *database, bool use) {
 
     pa_assert_se(pa_database_set(database, &key, &data, true) == 0);
 
+    pa_xfree(card_desc);
     pa_xfree(data.data);
 }
 
@@ -91,7 +92,7 @@ static bool* card_load(pa_card *card, pa_database *database) {
     pa_assert(card);
     pa_assert(database);
 
-    key.data = card_desc = pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION);
+    key.data = card_desc = pa_xstrdup(pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION));
     key.size = strlen(card_desc);
 
     if(pa_database_get(database, &key, &data) == NULL)
@@ -99,6 +100,7 @@ static bool* card_load(pa_card *card, pa_database *database) {
     else
         return (bool*) data.data;
 
+    pa_xfree(card_desc);
     /* TODO: who frees data.data? */
 }
 
@@ -118,6 +120,7 @@ static void notification_reply_cb(pa_ui_notification_reply* reply) {
     case PA_UI_NOTIFCATION_REPLY_CANCELLED:
     case PA_UI_NOTIFCATION_REPLY_DISMISSED:
     case PA_UI_NOTIFCATION_REPLY_EXPIRED:
+    default:
         break;
 
     case PA_UI_NOTIFCATION_REPLY_ACTION_INVOKED:
@@ -136,7 +139,8 @@ static void notification_reply_cb(pa_ui_notification_reply* reply) {
 }
 
 static pa_hook_result_t card_put_cb(pa_core *core, pa_card *card, void *userdata) {
-    char *card_name, *body;
+    const char *card_name;
+    char *body;
     pa_ui_notification *n;
     struct userdata *u;
     struct notification_userdata *nu;
@@ -158,8 +162,8 @@ static pa_hook_result_t card_put_cb(pa_core *core, pa_card *card, void *userdata
 
         body = pa_sprintf_malloc("Would you like to set %s as default?", card_name);
         n = pa_ui_notification_new(notification_reply_cb, "A new card has been connected.", body, -1, nu);
-        pa_hashmap_put(n->actions, "0", "Yes");
-        pa_hashmap_put(n->actions, "1", "No");
+        pa_hashmap_put(n->actions, "0", pa_xstrdup("Yes"));
+        pa_hashmap_put(n->actions, "1", pa_xstrdup("No"));
 
         pa_xfree(body);
 
