@@ -172,13 +172,22 @@ pa_card *pa_card_new(pa_core *core, pa_card_new_data *data) {
     pa_device_init_icon(c->proplist, TRUE);
     pa_device_init_intended_roles(c->proplist);
 
-    pa_assert_se(pa_idxset_put(core->cards, c, &c->index) >= 0);
-
     pa_log_info("Created %u \"%s\"", c->index, c->name);
-    pa_subscription_post(core, PA_SUBSCRIPTION_EVENT_CARD|PA_SUBSCRIPTION_EVENT_NEW, c->index);
 
-    pa_hook_fire(&core->hooks[PA_CORE_HOOK_CARD_PUT], c);
     return c;
+}
+
+void pa_card_put(pa_card *c) {
+    pa_assert(c);
+    /* A card should have at least a sink or a source? What about the Off profile? */
+    /* pa_assert(!pa_idxset_is_empty(c->sinks) || !pa_idxset_is_empty(c->sources)); */
+    /* TODO: do I need to check for other stuff? */
+    /* pa_assert(c->set_profile); */
+
+    pa_assert_se(pa_idxset_put(c->core->cards, c, &c->index) >= 0);
+
+    pa_subscription_post(c->core, PA_SUBSCRIPTION_EVENT_CARD|PA_SUBSCRIPTION_EVENT_NEW, c->index);
+    pa_hook_fire(&c->core->hooks[PA_CORE_HOOK_CARD_PUT], c);
 }
 
 void pa_card_free(pa_card *c) {

@@ -768,6 +768,8 @@ int pa__init(pa_module *m) {
     /* create sources */
     ca_device_create_streams(m, TRUE);
 
+    pa_card_put(u->card);
+
     /* create the message thread */
     if (!(u->thread = pa_thread_new(u->device_name, thread_func, u))) {
         pa_log("Failed to create thread.");
