@@ -29,6 +29,7 @@ typedef void(*pa_ui_notification_reply_cb_t)(pa_ui_notification_reply *reply);
 
 struct pa_ui_notification {
     pa_ui_notification *replaced_notification;
+    char *icon;
     char *summary;
     char *body;
     pa_hashmap *actions;
@@ -53,7 +54,7 @@ struct pa_ui_notification_reply {
     char *action_key;
 };
 
-pa_ui_notification* pa_ui_notification_new(pa_ui_notification_reply_cb_t reply_cb, const char *summary, const char *body, int timeout, void *userdata);
+pa_ui_notification* pa_ui_notification_new(pa_ui_notification_reply_cb_t reply_cb, const char *icon, const char *summary, const char *body, int timeout, void *userdata);
 void pa_ui_notification_free(pa_ui_notification *notification);
 
 pa_ui_notification_reply* pa_ui_notification_reply_new(pa_ui_notification_reply_type_t type, pa_ui_notification *source, char *action_key);

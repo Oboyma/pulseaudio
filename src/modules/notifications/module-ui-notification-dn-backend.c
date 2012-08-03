@@ -226,7 +226,7 @@ static void send_notification(pa_ui_notification_backend *b, pa_ui_notification 
 
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &u->app_name));
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, (void *) &replaces_id));
-    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &u->app_icon));
+    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->icon));
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->summary));
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->body));
 
@@ -361,7 +361,6 @@ int pa__init(pa_module*m) {
     dbus_error_init(&err);
 
     u->app_name = pa_xstrdup("PulseAudio");
-    u->app_icon = pa_xstrdup("");
     u->conn = pa_dbus_bus_get(m->core, DBUS_BUS_SESSION, &err);
     u->displaying = pa_hashmap_new(pa_idxset_trivial_hash_func, pa_idxset_trivial_compare_func);
     u->cancelling = pa_idxset_new(pa_idxset_trivial_hash_func, pa_idxset_trivial_compare_func);
@@ -462,7 +461,6 @@ void pa__done(pa_module*m) {
             pa_dbus_remove_matches(pa_dbus_connection_get(u->conn), "type='signal',sender='org.freedesktop.Notifications',interface='org.freedesktop.Notifications',path='/org/freedesktop/Notifications'", NULL);
 
             pa_xfree(u->app_name);
-            pa_xfree(u->app_icon);
             pa_dbus_connection_unref(u->conn);
         }
 
