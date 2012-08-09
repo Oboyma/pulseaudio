@@ -688,6 +688,8 @@ int pa__init(pa_module *m) {
                     "is abused (i.e. fixes are not pushed to ALSA), the decibel fix feature may be removed in some future "
                     "PulseAudio version.", u->card->name);
 
+    pa_card_put(u->card);
+
     return 0;
 
 fail:

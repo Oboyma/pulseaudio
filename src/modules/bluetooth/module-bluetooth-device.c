@@ -2407,6 +2407,8 @@ int pa__init(pa_module* m) {
         if (init_profile(u) < 0)
             goto fail;
 
+    pa_card_put(u->card);
+
     if (u->sink || u->source)
         if (start_thread(u) < 0)
             goto fail;

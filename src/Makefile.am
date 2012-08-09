@@ -244,6 +244,7 @@ TESTS_default = \
 		volume-test \
 		mix-test \
 		proplist-test \
+		cpu-test \
 		lock-autospawn-test
 
 TESTS_norun = \
@@ -302,16 +303,16 @@ TESTS = $(TESTS_default)
 if BUILD_TESTS_DEFAULT
 noinst_PROGRAMS = $(TESTS_default) $(TESTS_norun) $(TESTS_daemon)
 else
-check_PROGRAMS = $(TESTS_default) $(TESTS_norun) $(TESTS_daemon)
+check_PROGRAMS = $(TESTS_default) $(TESTS_norun)
 endif
 
-check-daemon:
-	$(MAKE) check TESTS="$(TESTS_daemon)"
+check-daemon: $(TESTS_daemon)
+	PATH=$(builddir):${PATH} $(top_srcdir)/src/tests/test-daemon.sh $(TESTS_daemon)
 
 mainloop_test_SOURCES = tests/mainloop-test.c
-mainloop_test_CFLAGS = $(AM_CFLAGS)
+mainloop_test_CFLAGS = $(AM_CFLAGS) $(LIBCHECK_CFLAGS)
 mainloop_test_LDADD = $(AM_LDADD) libpulse.la libpulsecommon-@PA_MAJORMINOR@.la
-mainloop_test_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS)
+mainloop_test_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS) $(LIBCHECK_LIBS)
 
 thread_mainloop_test_SOURCES = tests/thread-mainloop-test.c
 thread_mainloop_test_CFLAGS = $(AM_CFLAGS)
@@ -319,9 +320,9 @@ thread_mainloop_test_LDADD = $(AM_LDADD) libpulsecore-@PA_MAJORMINOR@.la libpuls
 thread_mainloop_test_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS)
 
 utf8_test_SOURCES = tests/utf8-test.c
-utf8_test_CFLAGS = $(AM_CFLAGS)
+utf8_test_CFLAGS = $(AM_CFLAGS) $(LIBCHECK_CFLAGS)
 utf8_test_LDADD = $(AM_LDADD) libpulse.la
-utf8_test_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS)
+utf8_test_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS) $(LIBCHECK_LIBS)
 
 format_test_SOURCES = tests/format-test.c
 format_test_CFLAGS = $(AM_CFLAGS)
@@ -404,9 +405,9 @@ extended_test_CFLAGS = $(AM_CFLAGS)
 extended_test_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS)
 
 strlist_test_SOURCES = tests/strlist-test.c
-strlist_test_CFLAGS = $(AM_CFLAGS)
+strlist_test_CFLAGS = $(AM_CFLAGS) $(LIBCHECK_CFLAGS)
 strlist_test_LDADD = $(AM_LDADD) $(WINSOCK_LIBS) libpulsecore-@PA_MAJORMINOR@.la libpulse.la libpulsecommon-@PA_MAJORMINOR@.la
-strlist_test_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS)
+strlist_test_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS) $(LIBCHECK_LIBS)
 
 close_test_SOURCES = tests/close-test.c
 close_test_CFLAGS = $(AM_CFLAGS)
@@ -434,9 +435,9 @@ cpulimit_test2_LDADD = $(AM_LDADD) libpulsecore-@PA_MAJORMINOR@.la libpulse.la l
 cpulimit_test2_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS)
 
 mainloop_test_glib_SOURCES = $(mainloop_test_SOURCES)
-mainloop_test_glib_CFLAGS = $(mainloop_test_CFLAGS) $(GLIB20_CFLAGS) -DGLIB_MAIN_LOOP
+mainloop_test_glib_CFLAGS = $(mainloop_test_CFLAGS) $(LIBCHECK_CFLAGS) $(GLIB20_CFLAGS) -DGLIB_MAIN_LOOP
 mainloop_test_glib_LDADD = $(mainloop_test_LDADD) $(GLIB20_LIBS) libpulse-mainloop-glib.la
-mainloop_test_glib_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS)
+mainloop_test_glib_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS) $(LIBCHECK_LIBS)
 
 memblockq_test_SOURCES = tests/memblockq-test.c
 memblockq_test_CFLAGS = $(AM_CFLAGS)
@@ -465,8 +466,8 @@ resampler_test_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS)
 
 mix_test_SOURCES = tests/mix-test.c
 mix_test_LDADD = $(AM_LDADD) libpulsecore-@PA_MAJORMINOR@.la libpulse.la libpulsecommon-@PA_MAJORMINOR@.la
-mix_test_CFLAGS = $(AM_CFLAGS)
-mix_test_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS)
+mix_test_CFLAGS = $(AM_CFLAGS) $(LIBCHECK_CFLAGS)
+mix_test_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS) $(LIBCHECK_LIBS)
 
 remix_test_SOURCES = tests/remix-test.c
 remix_test_LDADD = $(AM_LDADD) libpulsecore-@PA_MAJORMINOR@.la libpulse.la libpulsecommon-@PA_MAJORMINOR@.la
@@ -482,6 +483,11 @@ proplist_test_SOURCES = tests/proplist-test.c
 proplist_test_LDADD = $(AM_LDADD) libpulsecore-@PA_MAJORMINOR@.la libpulse.la libpulsecommon-@PA_MAJORMINOR@.la
 proplist_test_CFLAGS = $(AM_CFLAGS)
 proplist_test_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS)
+
+cpu_test_SOURCES = tests/cpu-test.c
+cpu_test_LDADD = $(AM_LDADD) libpulsecore-@PA_MAJORMINOR@.la libpulse.la libpulsecommon-@PA_MAJORMINOR@.la
+cpu_test_CFLAGS = $(AM_CFLAGS) $(LIBCHECK_CFLAGS)
+cpu_test_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS) $(LIBCHECK_LIBS)
 
 rtstutter_SOURCES = tests/rtstutter.c
 rtstutter_LDADD = $(AM_LDADD) libpulsecore-@PA_MAJORMINOR@.la libpulse.la libpulsecommon-@PA_MAJORMINOR@.la
@@ -910,6 +916,10 @@ modlibexec_LTLIBRARIES = \
 		libprotocol-simple.la \
 		libprotocol-http.la \
 		libprotocol-native.la
+
+if HAVE_WEBRTC
+modlibexec_LTLIBRARIES += libwebrtc-util.la
+endif
 
 if HAVE_ESOUND
 modlibexec_LTLIBRARIES += \
@@ -1851,7 +1861,6 @@ if HAVE_WEBRTC
 # The webrtc code is split off into a helper library to avoid having automake
 # link module-echo-cancel with C++ (which it does if there are any C++ deps,
 # even conditional ones).
-modlibexec_LTLIBRARIES += libwebrtc-util.la
 
 libwebrtc_util_la_SOURCES = modules/echo-cancel/webrtc.cc
 libwebrtc_util_la_CXXFLAGS = $(AM_CXXFLAGS) $(SERVER_CFLAGS) $(WEBRTC_CFLAGS) -DHAVE_WEBRTC=1
@@ -2088,4 +2097,22 @@ $(installmodlibexecLTLIBRARIES): install-pkglibLTLIBRARIES
 installpadsplibLTLIBRARIES = install-padsplibLTLIBRARIES
 $(installpadsplibLTLIBRARIES): install-libLTLIBRARIES
 
-.PHONY: massif update-all update-ffmpeg update-sbc update-map-file
+if HAVE_GCOV
+coverage:
+	@echo ""
+	@echo "Don't forget to run 'make check' before generating coverage stats."
+	@echo ""
+	lcov --capture --directory . --output-file $(builddir)/gcov-all.info
+	-rm -r $(builddir)/coverage
+	genhtml --output-directory $(builddir)/coverage gcov-all.info
+	@echo ""
+	@echo "Coverage data now available at: $(abs_builddir)/coverage/index.html"
+else
+coverage:
+	@echo ""
+	@echo "To generate coverage stats, rerun configure with '--enable-gcov',"
+	@echo "and don't forget to disable it again for regular builds."
+	@echo ""
+endif
+
+.PHONY: massif update-all update-ffmpeg update-sbc update-map-file coverage
