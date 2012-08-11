@@ -37,6 +37,7 @@
 #include <pulsecore/log.h>
 #include <pulsecore/macro.h>
 #include <pulsecore/module.h>
+#include <pulsecore/namereg.h>
 
 #include "notification.h"
 #include "notification-manager.h"
@@ -58,10 +59,99 @@ struct userdata {
 struct notification_userdata {
     struct userdata *u;
     pa_card *card;
+    pa_core *core;
 };
 
 static void card_set_default(pa_card *card, pa_core *core) {
+    pa_sink_input *i;
+    pa_source_output *o;
+    pa_sink *def_sink, *sink;
+    pa_source *def_source, *source;
+    uint32_t idx;
+
+    pa_assert(card);
+    pa_assert(core);
+
     pa_log_debug("Setting %s as default.", pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION));
+
+    /* get the first sink */
+    sink = pa_idxset_first(card->sinks, &idx);
+
+    /* find the first non-monitor source */
+    PA_IDXSET_FOREACH(source, card->sources, idx)
+        if (!source->monitor_of)
+            break;
+
+    /* from module-switch-on-connect */
+
+    /* Don't want to run during startup or shutdown */
+    if (core->state != PA_CORE_RUNNING)
+        return;
+
+    if (!sink) {
+        pa_log_info("The card has no sinks.");
+        goto source;
+    }
+
+    def_sink = pa_namereg_get_default_sink(core);
+    if (def_sink == sink)
+        goto source;
+
+    /* Actually do the switch to the new sink */
+    pa_namereg_set_default_sink(core, sink);
+
+    /* Now move all old inputs over */
+    if (pa_idxset_size(def_sink->inputs) <= 0) {
+        pa_log_debug("No sink inputs to move away.");
+        goto source;
+    }
+
+    PA_IDXSET_FOREACH(i, def_sink->inputs, idx) {
+        if (i->save_sink || !PA_SINK_INPUT_IS_LINKED(i->state))
+            continue;
+
+        if (pa_sink_input_move_to(i, sink, FALSE) < 0)
+            pa_log_info("Failed to move sink input %u \"%s\" to %s.", i->index,
+                        pa_strnull(pa_proplist_gets(i->proplist, PA_PROP_APPLICATION_NAME)), sink->name);
+        else
+            pa_log_info("Successfully moved sink input %u \"%s\" to %s.", i->index,
+                        pa_strnull(pa_proplist_gets(i->proplist, PA_PROP_APPLICATION_NAME)), sink->name);
+    }
+
+source:
+    if (!source) {
+        pa_log_info("The card has no sources.");
+        return;
+    }
+
+    /* Don't switch to a monitoring source */
+    if (source->monitor_of)
+        return;
+
+    def_source = pa_namereg_get_default_source(core);
+    if (def_source == source)
+        return;
+
+    /* Actually do the switch to the new source */
+    pa_namereg_set_default_source(core, source);
+
+    /* Now move all old outputs over */
+    if (pa_idxset_size(def_source->outputs) <= 0) {
+        pa_log_debug("No source outputs to move away.");
+        return;
+    }
+
+    PA_IDXSET_FOREACH(o, def_source->outputs, idx) {
+        if (o->save_source || !PA_SOURCE_OUTPUT_IS_LINKED(o->state))
+            continue;
+
+        if (pa_source_output_move_to(o, source, FALSE) < 0)
+            pa_log_info("Failed to move source output %u \"%s\" to %s.", o->index,
+                        pa_strnull(pa_proplist_gets(o->proplist, PA_PROP_APPLICATION_NAME)), source->name);
+        else
+            pa_log_info("Successfully moved source output %u \"%s\" to %s.", o->index,
+                        pa_strnull(pa_proplist_gets(o->proplist, PA_PROP_APPLICATION_NAME)), source->name);
+    }
 }
 
 static void card_save(pa_card *card, pa_database *database, bool use) {
@@ -125,7 +215,7 @@ static void notification_reply_cb(pa_ui_notification_reply* reply) {
 
     case PA_UI_NOTIFCATION_REPLY_ACTION_INVOKED:
         if (pa_streq(reply->action_key, "0")) {
-            card_set_default(nu->card, NULL); /* TODO: get the core here */
+            card_set_default(nu->card, nu->core);
             card_save(nu->card, nu->u->database, true);
         } else if (pa_streq(reply->action_key, "1")) {
             card_save(nu->card, nu->u->database, false);
@@ -157,6 +247,7 @@ static pa_hook_result_t card_put_cb(pa_core *core, pa_card *card, void *userdata
 
         nu->u = u;
         nu->card = card;
+        nu->core = core;
         card_name = pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION);
         pa_log_debug("Card detected: %s.", card_name);
 
