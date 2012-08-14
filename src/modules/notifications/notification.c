@@ -30,11 +30,14 @@
 #include "notification.h"
 #include "notification-backend.h"
 
-pa_ui_notification* pa_ui_notification_new(pa_ui_notification_reply_cb_t reply_cb, const char* icon, const char* summary, const char* body, int timeout, void *userdata) {
+pa_ui_notification* pa_ui_notification_new(pa_ui_notification_reply_cb_t reply_cb, const char* icon, const char *title, const char* summary, const char* body, int timeout, void *userdata) {
     pa_ui_notification *n = pa_xnew0(pa_ui_notification, 1);
 
     if (icon)
         n->icon = pa_xstrdup(icon);
+
+    if (title)
+        n->title = pa_xstrdup(title);
 
     if (summary)
         n->summary = pa_xstrdup(summary);
@@ -56,6 +59,7 @@ static void free_func(void* p, void* userdata) {
 
 void pa_ui_notification_free(pa_ui_notification *n) {
     pa_xfree(n->icon);
+    pa_xfree(n->title);
     pa_xfree(n->summary);
     pa_xfree(n->body);
 

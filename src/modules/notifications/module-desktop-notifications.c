@@ -161,7 +161,7 @@ static pa_hook_result_t card_put_cb(pa_core *core, pa_card *card, void *userdata
         pa_log_debug("Card detected: %s.", card_name);
 
         body = pa_sprintf_malloc("Would you like to set %s as default?", card_name);
-        n = pa_ui_notification_new(notification_reply_cb, "audio-card-symbolic", "A new card has been connected.", body, -1, nu);
+        n = pa_ui_notification_new(notification_reply_cb, "audio-card-symbolic", card_name, "A new card has been connected.", body, -1, nu);
         pa_hashmap_put(n->actions, "0", pa_xstrdup("Yes"));
         pa_hashmap_put(n->actions, "1", pa_xstrdup("No"));
 
