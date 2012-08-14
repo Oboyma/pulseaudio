@@ -645,6 +645,20 @@ void pa_dbus_append_basic_array_variant(DBusMessageIter *iter, int item_type, co
     pa_xfree(array_signature);
 }
 
+void pa_dbus_append_basic_dict_entry(DBusMessageIter *dict_iter, const char *key, int type, void *data) {
+    DBusMessageIter dict_entry_iter;
+
+    pa_assert(dict_iter);
+    pa_assert(key);
+    pa_assert(dbus_type_is_basic(type));
+    pa_assert(data);
+
+    pa_assert_se(dbus_message_iter_open_container(dict_iter, DBUS_TYPE_DICT_ENTRY, NULL, &dict_entry_iter));
+    pa_assert_se(dbus_message_iter_append_basic(&dict_entry_iter, DBUS_TYPE_STRING, &key));
+    pa_assert_se(dbus_message_iter_append_basic(&dict_entry_iter, type, data));
+    pa_assert_se(dbus_message_iter_close_container(dict_iter, &dict_entry_iter));
+}
+
 void pa_dbus_append_basic_variant_dict_entry(DBusMessageIter *dict_iter, const char *key, int type, void *data) {
     DBusMessageIter dict_entry_iter;
 

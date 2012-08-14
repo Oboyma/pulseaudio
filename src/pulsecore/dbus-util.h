@@ -96,6 +96,7 @@ void pa_dbus_send_proplist_variant_reply(DBusConnection *c, DBusMessage *in_repl
 void pa_dbus_append_basic_array(DBusMessageIter *iter, int item_type, const void *array, unsigned n);
 void pa_dbus_append_basic_array_variant(DBusMessageIter *iter, int item_type, const void *array, unsigned n);
 void pa_dbus_append_basic_variant(DBusMessageIter *iter, int type, void *data);
+void pa_dbus_append_basic_dict_entry(DBusMessageIter *dict_iter, const char *key, int type, void *data);
 void pa_dbus_append_basic_variant_dict_entry(DBusMessageIter *dict_iter, const char *key, int type, void *data);
 void pa_dbus_append_basic_array_variant_dict_entry(
         DBusMessageIter *dict_iter,
