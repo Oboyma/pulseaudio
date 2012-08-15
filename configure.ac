@@ -1144,6 +1144,27 @@ AS_IF([test "x$enable_desktop_notifications" != "xyes" && test "x$HAVE_DESKTOP_N
 
 AM_CONDITIONAL([HAVE_DESKTOP_NOTIFICATIONS], [test "x$HAVE_DESKTOP_NOTIFICATIONS" = x1])
 
+#### Application indicator support (optional, dependant on D-Bus, Desktop Notifications) ####
+
+AC_ARG_ENABLE([appindicator],
+    AS_HELP_STRING([--disable-appindicator],[Disable optional Application Indicator support]))
+
+AS_IF([test "x$enable_appindicator" != "xno"],
+    [PKG_CHECK_MODULES(APPINDICATOR, [ appindicator-0.1 ], HAVE_APPINDICATOR=1, HAVE_APPINDICATOR=0)],
+    HAVE_APPINDICATOR=0)
+
+AS_IF([test "x$HAVE_DBUS" != "x1"], HAVE_APPINDICATOR=0)
+
+AS_IF([test "x$HAVE_DESKTOP_NOTIFICATIONS" != "x1"], HAVE_APPINDICATOR=0)
+
+AS_IF([test "x$enable_appindicator" != "xyes" && test "x$HAVE_APPINDICATOR" = "x0"],
+    [AC_MSG_ERROR([*** Aplication Indicator support not found (requires D-Bus, Desktop Notifications)])])
+
+AC_SUBST(APPINDICATOR_CFLAGS)
+AC_SUBST(APPINDICATOR_LIBS)
+
+AM_CONDITIONAL([HAVE_APPINDICATOR], [test "x$HAVE_APPINDICATOR" = x1])
+
 #### Build and Install man pages ####
 
 AC_ARG_ENABLE([manpages],
@@ -1410,6 +1431,8 @@ AS_IF([test "x$HAVE_ESOUND" = "x1"], ENABLE_ESOUND=yes, ENABLE_ESOUND=no)
 AS_IF([test "x$HAVE_ESOUND" = "x1" -a "x$USE_PER_USER_ESOUND_SOCKET" = "x1"], ENABLE_PER_USER_ESOUND_SOCKET=yes, ENABLE_PER_USER_ESOUND_SOCKET=no)
 AS_IF([test "x$HAVE_GCOV" = "x1"], ENABLE_GCOV=yes, ENABLE_GCOV=no)
 AS_IF([test "x$enable_legacy_database_entry_format" != "xno"], ENABLE_LEGACY_DATABASE_ENTRY_FORMAT=yes, ENABLE_LEGACY_DATABASE_ENTRY_FORMAT=no)
+AS_IF([test "x$HAVE_DESKTOP_NOTIFICATIONS" = "x1"], ENABLE_DESKTOP_NOTIFICATIONS=yes, ENABLE_DESKTOP_NOTIFICATIONS=no)
+AS_IF([test "x$HAVE_APPINDICATOR" = "x1"], ENABLE_APPINDICATOR=yes, ENABLE_APPINDICATOR=no)
 
 echo "
  ---{ $PACKAGE_NAME $VERSION }---
@@ -1443,6 +1466,8 @@ echo "
     Enable Xen PV driver:          ${ENABLE_XEN}
     Enable D-Bus:                  ${ENABLE_DBUS}
       Enable BlueZ:                ${ENABLE_BLUEZ}
+      Enable Desktop Notifications:${ENABLE_DESKTOP_NOTIFICATIONS}
+      Enable Application Indicator:${ENABLE_APPINDICATOR}
     Enable udev:                   ${ENABLE_UDEV}
       Enable HAL->udev compat:     ${ENABLE_HAL_COMPAT}
     Enable systemd login:          ${ENABLE_SYSTEMD}
