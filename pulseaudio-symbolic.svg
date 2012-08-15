@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   version="1.1"
+   width="16"
+   height="16"
+   id="svg2161">
+  <defs
+     id="defs2163">
+    <linearGradient
+       id="linearGradient3093">
+      <stop
+         id="stop3095"
+         style="stop-color:#000000;stop-opacity:1"
+         offset="0" />
+      <stop
+         id="stop3097"
+         style="stop-color:#000000;stop-opacity:0"
+         offset="1" />
+    </linearGradient>
+    <radialGradient
+       cx="224.5"
+       cy="387.11252"
+       r="174.5"
+       fx="224.5"
+       fy="387.11252"
+       id="radialGradient2472"
+       xlink:href="#linearGradient3093"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(1,0,0,0.266476,0,283.9565)" />
+    <linearGradient
+       id="linearGradient2503">
+      <stop
+         id="stop2505"
+         style="stop-color:#000000;stop-opacity:1"
+         offset="0" />
+      <stop
+         id="stop2507"
+         style="stop-color:#141413;stop-opacity:1"
+         offset="1" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient2495">
+      <stop
+         id="stop2497"
+         style="stop-color:#0a0a09;stop-opacity:1"
+         offset="0" />
+      <stop
+         id="stop2499"
+         style="stop-color:#282927;stop-opacity:1"
+         offset="1" />
+    </linearGradient>
+    <linearGradient
+       x1="585"
+       y1="390.61252"
+       x2="585"
+       y2="85.376541"
+       id="linearGradient2399"
+       xlink:href="#linearGradient2535"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       id="linearGradient2535">
+      <stop
+         id="stop2537"
+         style="stop-color:#ffffff;stop-opacity:0.36078432"
+         offset="0" />
+      <stop
+         id="stop2539"
+         style="stop-color:#ffffff;stop-opacity:0"
+         offset="1" />
+    </linearGradient>
+    <linearGradient
+       x1="532"
+       y1="131.40625"
+       x2="667.5"
+       y2="357.40625"
+       id="linearGradient2397"
+       xlink:href="#linearGradient2535"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="translate(-291.933,627.3998)" />
+    <linearGradient
+       id="linearGradient3072">
+      <stop
+         id="stop3074"
+         style="stop-color:#ffffff;stop-opacity:1"
+         offset="0" />
+      <stop
+         id="stop3076"
+         style="stop-color:#ffffff;stop-opacity:0"
+         offset="1" />
+    </linearGradient>
+    <linearGradient
+       x1="585"
+       y1="76.360481"
+       x2="585"
+       y2="170.3912"
+       id="linearGradient2395"
+       xlink:href="#linearGradient3072"
+       gradientUnits="userSpaceOnUse" />
+  </defs>
+  <metadata
+     id="metadata2166">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <cc:license
+           rdf:resource="http://www.gnu.org/copyleft/gpl.html" />
+        <dc:title></dc:title>
+        <dc:date>2006-08-28</dc:date>
+        <dc:creator>
+          <cc:Agent>
+            <dc:title>Pierre Ossman &lt;ossman@cendio.se&gt; for Cendio AB</dc:title>
+          </cc:Agent>
+        </dc:creator>
+        <dc:rights>
+          <cc:Agent>
+            <dc:title />
+          </cc:Agent>
+        </dc:rights>
+        <dc:contributor>
+          <cc:Agent>
+            <dc:title>Rafael Jannone (basic idea)</dc:title>
+          </cc:Agent>
+        </dc:contributor>
+      </cc:Work>
+      <cc:License
+         rdf:about="http://creativecommons.org/licenses/GPL/2.0/">
+        <cc:permits
+           rdf:resource="http://web.resource.org/cc/Reproduction" />
+        <cc:permits
+           rdf:resource="http://web.resource.org/cc/Distribution" />
+        <cc:requires
+           rdf:resource="http://web.resource.org/cc/Notice" />
+        <cc:permits
+           rdf:resource="http://web.resource.org/cc/DerivativeWorks" />
+        <cc:requires
+           rdf:resource="http://web.resource.org/cc/ShareAlike" />
+        <cc:requires
+           rdf:resource="http://web.resource.org/cc/SourceCode" />
+      </cc:License>
+    </rdf:RDF>
+  </metadata>
+  <rect
+     width="12.026168"
+     height="12.026167"
+     ry="2.1115682"
+     x="1.9869161"
+     y="1.9869165"
+     id="rect2371"
+     style="fill:none;stroke:#bebebe;stroke-width:0.97383279;stroke-linecap:round;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;stroke-dashoffset:0" />
+  <g
+     transform="matrix(0.03482932,0,0,0.0360251,-15.927773,-26.856446)"
+     id="g2415"
+     style="fill:#bebebe;fill-opacity:1">
+    <path
+       d="m 22,863.61249 a 23,23 0 1 1 -46,0 23,23 0 1 1 46,0 z"
+       transform="matrix(1.676363,0,0,1.676363,688.6772,-480.168)"
+       id="path2417"
+       style="fill:#bebebe;fill-opacity:1;stroke:none" />
+    <path
+       d="m 666.92273,892.01313 c -33.41788,8.8724 -58.06252,39.3337 -58.0625,75.53129 0,36.19748 24.64463,66.69008 58.0625,75.56248 -24.10776,-10.8192 -41.4375,-40.5874 -41.4375,-75.56248 -10e-6,-34.97499 17.32973,-64.71209 41.4375,-75.53129 z m 40.15625,0 c 24.10777,10.8192 41.4375,40.5562 41.4375,75.53129 0,34.97508 -17.32974,64.74328 -41.4375,75.56248 33.41788,-8.8724 58.06252,-39.365 58.0625,-75.56248 0,-36.19749 -24.64461,-66.65889 -58.0625,-75.53129 z"
+       id="path2419"
+       style="fill:#bebebe;fill-opacity:1;stroke:none" />
+    <path
+       d="m 655.64705,849.58672 c -52.18504,13.85506 -90.66987,61.42313 -90.66984,117.9489 0,56.52568 38.48482,104.14268 90.66984,117.99768 -37.64645,-16.8952 -64.7084,-63.3809 -64.7084,-117.99768 -2e-5,-54.61657 27.06194,-101.05374 64.7084,-117.9489 z m 62.70761,0 c 37.64646,16.89516 64.7084,63.33217 64.7084,117.9489 0,54.61678 -27.06195,101.10248 -64.7084,117.99768 52.18504,-13.855 90.66987,-61.472 90.66984,-117.99768 0,-56.52561 -38.48478,-104.09384 -90.66984,-117.9489 z"
+       id="path2421"
+       style="fill:#bebebe;fill-opacity:1;stroke:none" />
+  </g>
+</svg>
