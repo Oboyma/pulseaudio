@@ -1139,9 +1139,6 @@ AS_IF([test "x$enable_desktop_notifications" != "xno"],
 
 AS_IF([test "x$HAVE_DBUS" != "x1"], HAVE_DESKTOP_NOTIFICATIONS=0)
 
-AS_IF([test "x$enable_desktop_notifications" != "xyes" && test "x$HAVE_DESKTOP_NOTIFICATIONS" = "x0"],
-    [AC_MSG_ERROR([*** Desktop Notifications support not found (requires D-Bus)])])
-
 AM_CONDITIONAL([HAVE_DESKTOP_NOTIFICATIONS], [test "x$HAVE_DESKTOP_NOTIFICATIONS" = x1])
 
 #### Application indicator support (optional, dependant on D-Bus, Desktop Notifications) ####
@@ -1156,9 +1153,6 @@ AS_IF([test "x$enable_appindicator" != "xno"],
 AS_IF([test "x$HAVE_DBUS" != "x1"], HAVE_APPINDICATOR=0)
 
 AS_IF([test "x$HAVE_DESKTOP_NOTIFICATIONS" != "x1"], HAVE_APPINDICATOR=0)
-
-AS_IF([test "x$enable_appindicator" != "xyes" && test "x$HAVE_APPINDICATOR" = "x0"],
-    [AC_MSG_ERROR([*** Aplication Indicator support not found (requires D-Bus, Desktop Notifications)])])
 
 AC_SUBST(APPINDICATOR_CFLAGS)
 AC_SUBST(APPINDICATOR_LIBS)
