@@ -322,15 +322,20 @@ void send_notification(pa_ui_notification_backend *b, pa_ui_notification *n, boo
     DBusMessage *msg;
     DBusMessageIter args, dict_iter, array_iter;
     pa_dbus_pending *p;
-    unsigned replaces_id;
+    unsigned *replaces_id;
     char *key, *value;
     void *state;
     dn_backend_userdata *u;
 
-    replaces_id = 0; /* match the existing notifications against the notification to be replaced */
-
     u = b->userdata;
     conn = pa_dbus_connection_get(u->conn);
+
+    replaces_id = NULL;
+    if (n->replaced_notification != NULL)
+        replaces_id = pa_hashmap_remove(u->displaying, n->replaced_notification);
+
+    if (replaces_id == NULL)
+        replaces_id = pa_xnew0(unsigned, 1);
 
     msg = dbus_message_new_method_call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "Notify");
 
@@ -338,7 +343,7 @@ void send_notification(pa_ui_notification_backend *b, pa_ui_notification *n, boo
     dbus_message_iter_init_append(msg, &args);
 
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &u->app_name));
-    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, (void *) &replaces_id));
+    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, (void *) replaces_id));
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->icon));
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->summary));
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->body));
@@ -364,6 +369,8 @@ void send_notification(pa_ui_notification_backend *b, pa_ui_notification *n, boo
     dbus_message_unref(msg);
 
     PA_LLIST_PREPEND(pa_dbus_pending, u->pending_send, p);
+
+    pa_xfree(replaces_id);
 }
 
 void cancel_notification(pa_ui_notification_backend *backend, pa_ui_notification *notification) {
