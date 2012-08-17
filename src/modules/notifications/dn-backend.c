@@ -49,7 +49,7 @@ static inline void cancel_notification_dbus(pa_ui_notification_backend *backend,
     pa_assert(u = backend->userdata);
 
     conn = pa_dbus_connection_get(u->conn);
-    msg = dbus_message_new_method_call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "CloseNotification");
+    pa_assert_se(msg = dbus_message_new_method_call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "CloseNotification"));
     pa_assert_se(dbus_message_append_args(msg, DBUS_TYPE_UINT32, dbus_notification_id, DBUS_TYPE_INVALID));
 
     dbus_message_set_no_reply(msg, TRUE);
@@ -97,7 +97,7 @@ static void send_notification_reply(DBusPendingCall *pending, void *userdata) {
         goto finish;
     }
 
-    if(!dbus_message_get_args(msg, &err, DBUS_TYPE_UINT32, dbus_notification_id, DBUS_TYPE_INVALID)) {
+    if (!dbus_message_get_args(msg, &err, DBUS_TYPE_UINT32, dbus_notification_id, DBUS_TYPE_INVALID)) {
         pa_log_error("Failed to parse org.freedesktop.Notifications.Notify(): %s", err.message);
 
         u->notification_reply_handle(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL), u->reply_handle_userdata);
@@ -147,7 +147,7 @@ static DBusHandlerResult signal_cb(DBusConnection *conn, DBusMessage *msg, void 
     u = backend->userdata;
 
     dbus_error_init(&err);
-    if(dbus_message_is_signal(msg, "org.freedesktop.Notifications", "NotificationClosed")) {
+    if (dbus_message_is_signal(msg, "org.freedesktop.Notifications", "NotificationClosed")) {
         if (!dbus_message_get_args(msg, &err, DBUS_TYPE_UINT32, &dbus_notification_id, DBUS_TYPE_UINT32, &reason, DBUS_TYPE_INVALID)) {
             pa_log_error("Failed to parse org.freedesktop.Notifications.NotificationClosed: %s.", err.message);
             goto finish;
@@ -256,22 +256,24 @@ pa_ui_notification_backend* dn_backend_new_with_reply_handle(pa_core *core, dn_h
     backend->userdata = u = pa_xnew(dn_backend_userdata, 1);
 
     dbus_error_init(&err);
+    u->conn = pa_dbus_bus_get(core, DBUS_BUS_SESSION, &err);
+
+    if (dbus_error_is_set(&err)) {
+        pa_log_error("Failed to aquire D-Bus connection: %s", err.message);
+        goto fail;
+    }
 
     u->app_name = pa_xstrdup("PulseAudio");
-    u->conn = pa_dbus_bus_get(core, DBUS_BUS_SESSION, &err);
     u->displaying = pa_hashmap_new(pa_idxset_trivial_hash_func, pa_idxset_trivial_compare_func);
     u->cancelling = pa_idxset_new(pa_idxset_trivial_hash_func, pa_idxset_trivial_compare_func);
     u->notification_reply_handle = notification_reply_handle;
     u->reply_handle_userdata = userdata;
-
-    /* TODO: error checking */
 
     PA_LLIST_HEAD_INIT(pa_dbus_pending, u->pending_send);
 
     backend->send_notification = dn_send_notification;
     backend->cancel_notification = cancel_notification;
 
-    dbus_error_free(&err);
 
     if (!dbus_connection_add_filter(pa_dbus_connection_get(u->conn), signal_cb, backend, NULL)) {
         pa_log_error("Failed to add filter function.");
@@ -280,13 +282,15 @@ pa_ui_notification_backend* dn_backend_new_with_reply_handle(pa_core *core, dn_h
     u->filter_set = true;
 
     if (pa_dbus_add_matches(pa_dbus_connection_get(u->conn), &err, "type='signal',sender='org.freedesktop.Notifications',interface='org.freedesktop.Notifications',path='/org/freedesktop/Notifications'", NULL) < 0) {
-        pa_log("Failed to add D-Bus matches: %s", err.message);
+        pa_log_error("Failed to add D-Bus matches: %s", err.message);
         goto fail;
     }
+    dbus_error_free(&err);
 
     return backend;
 
 fail:
+    dbus_error_free(&err);
     dn_backend_free(backend);
     return NULL;
 }
@@ -297,7 +301,7 @@ void dn_backend_free(pa_ui_notification_backend *backend) {
     pa_assert(backend);
     u = backend->userdata;
 
-    if(u) {
+    if (u) {
         displaying_notifications_cancel(backend);
         pa_hashmap_free(u->displaying, NULL, NULL);
         pa_idxset_free(u->cancelling, NULL, NULL);
@@ -337,9 +341,8 @@ void send_notification(pa_ui_notification_backend *b, pa_ui_notification *n, boo
     if (replaces_id == NULL)
         replaces_id = pa_xnew0(unsigned, 1);
 
-    msg = dbus_message_new_method_call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "Notify");
+    pa_assert_se(msg = dbus_message_new_method_call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "Notify"));
 
-    /* TODO: msg != NULL */
     dbus_message_iter_init_append(msg, &args);
 
     pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &u->app_name));
@@ -403,7 +406,7 @@ pa_dbus_pending* pa_dbus_send_message(
 
     if (func) {
         pa_assert_se(dbus_connection_send_with_reply(conn, msg, &pending, -1));
-        /* TODO: pending != NULL */
+        pa_assert(pending);
 
         p = pa_dbus_pending_new(conn, NULL, pending, context_data, call_data);
         dbus_pending_call_set_notify(pending, func, p, NULL);

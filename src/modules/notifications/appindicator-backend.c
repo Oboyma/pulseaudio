@@ -57,7 +57,7 @@ static void clear_all_actions(appindicator_backend_userdata *u) {
     pa_assert(u);
 
     conn = pa_dbus_connection_get(u->conn);
-    msg = dbus_message_new_method_call(APPINDICATOR_DBUS_NAME, APPINDICATOR_DBUS_OBJECT, APPINDICATOR_DBUS_INTERFACE, "ClearAllActions");
+    pa_assert_se(msg = dbus_message_new_method_call(APPINDICATOR_DBUS_NAME, APPINDICATOR_DBUS_OBJECT, APPINDICATOR_DBUS_INTERFACE, "ClearAllActions"));
 
     dbus_message_set_no_reply(msg, TRUE);
     pa_dbus_send_message(conn, msg, NULL, NULL, NULL);
@@ -72,7 +72,7 @@ static void clear_actions(appindicator_backend_userdata *u, pa_ui_notification *
     pa_assert(notification);
 
     conn = pa_dbus_connection_get(u->conn);
-    msg = dbus_message_new_method_call(APPINDICATOR_DBUS_NAME, APPINDICATOR_DBUS_OBJECT, APPINDICATOR_DBUS_INTERFACE, "ClearActions");
+    pa_assert_se(msg = dbus_message_new_method_call(APPINDICATOR_DBUS_NAME, APPINDICATOR_DBUS_OBJECT, APPINDICATOR_DBUS_INTERFACE, "ClearActions"));
 
     pa_assert_se(dbus_message_append_args(msg, DBUS_TYPE_STRING, &notification->title, DBUS_TYPE_INVALID));
 
@@ -99,9 +99,8 @@ static void appindicator_send_notification(pa_ui_notification_backend *backend, 
 
         conn = pa_dbus_connection_get(u->conn);
 
-        msg = dbus_message_new_method_call(APPINDICATOR_DBUS_NAME, APPINDICATOR_DBUS_OBJECT, APPINDICATOR_DBUS_INTERFACE, "ShowActions");
+        pa_assert_se(msg = dbus_message_new_method_call(APPINDICATOR_DBUS_NAME, APPINDICATOR_DBUS_OBJECT, APPINDICATOR_DBUS_INTERFACE, "ShowActions"));
 
-        /* TODO: msg != NULL */
         dbus_message_iter_init_append(msg, &args);
 
         pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &notification->title));
@@ -161,13 +160,13 @@ static DBusHandlerResult signal_cb(DBusConnection *conn, DBusMessage *msg, void 
 
     dbus_error_init(&err);
 
-    if(dbus_message_is_signal(msg, APPINDICATOR_DBUS_INTERFACE, "ActionInvoked")) {
+    if (dbus_message_is_signal(msg, APPINDICATOR_DBUS_INTERFACE, "ActionInvoked")) {
         if (!dbus_message_get_args(msg, &err, DBUS_TYPE_STRING, &title, DBUS_TYPE_STRING, &action_key, DBUS_TYPE_INVALID)) {
             pa_log_error("Failed to parse " APPINDICATOR_DBUS_INTERFACE ".NotificationClosed: %s.", err.message);
             goto finish;
         }
 
-        if((notification = pa_hashmap_remove(u->displaying, title)) != NULL) {
+        if ((notification = pa_hashmap_remove(u->displaying, title)) != NULL) {
             pa_idxset_put(u->handled, title, NULL);
             pa_assert(pa_idxset_get_by_data(u->handled, title, NULL));
 
@@ -193,7 +192,7 @@ pa_ui_notification_backend* appindicator_backend_new(pa_core *core) {
     backend = pa_xnew(pa_ui_notification_backend, 1);
     backend->userdata = u = pa_xnew(appindicator_backend_userdata, 1);
 
-    if(!(u->dn_backend = dn_backend_new_with_reply_handle(core, handle_reply, (void *) u)))
+    if (!(u->dn_backend = dn_backend_new_with_reply_handle(core, handle_reply, (void *) u)))
         goto fail;
 
     dn_u = u->dn_backend->userdata;
