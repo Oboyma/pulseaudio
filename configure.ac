@@ -1147,8 +1147,16 @@ AC_ARG_ENABLE([appindicator],
     AS_HELP_STRING([--disable-appindicator],[Disable optional Application Indicator support]))
 
 AS_IF([test "x$enable_appindicator" != "xno"],
-    [PKG_CHECK_MODULES(APPINDICATOR, [ appindicator-0.1 ], HAVE_APPINDICATOR=1, HAVE_APPINDICATOR=0)],
+    [PKG_CHECK_MODULES(APPINDICATOR, [ appindicator-0.1 gio-2.0 ], HAVE_APPINDICATOR=1, HAVE_APPINDICATOR=0)],
     HAVE_APPINDICATOR=0)
+
+AM_PROG_VALAC
+
+# From vala.m4. AM_PROG_VALA stops the configuration if the version is not
+AS_IF([test -z "$VALAC"], HAVE_APPINDICATOR=0,
+    [
+    am__vala_version=`$VALAC --version | sed 's/Vala  *//'`
+    AS_VERSION_COMPARE([0.16.0], ["$am__vala_version"], [], [], HAVE_APPINDICATOR=0)])
 
 AS_IF([test "x$HAVE_DBUS" != "x1"], HAVE_APPINDICATOR=0)
 
@@ -1156,6 +1164,7 @@ AS_IF([test "x$HAVE_DESKTOP_NOTIFICATIONS" != "x1"], HAVE_APPINDICATOR=0)
 
 AC_SUBST(APPINDICATOR_CFLAGS)
 AC_SUBST(APPINDICATOR_LIBS)
+AC_SUBST(APPINDICATOR_VALAFLAGS, "--pkg gtk+-2.0 --pkg appindicator-0.1 --pkg gio-2.0")
 
 AM_CONDITIONAL([HAVE_APPINDICATOR], [test "x$HAVE_APPINDICATOR" = x1])
 

@@ -192,6 +192,10 @@ bin_PROGRAMS += pax11publish
 bin_SCRIPTS += start-pulseaudio-x11 start-pulseaudio-kde
 endif
 
+if HAVE_APPINDICATOR
+bin_PROGRAMS += app-indicator-server
+endif
+
 pacat_SOURCES = utils/pacat.c
 pacat_LDADD = $(AM_LDADD) libpulse.la libpulsecommon-@PA_MAJORMINOR@.la $(LIBSNDFILE_LIBS)
 pacat_CFLAGS = $(AM_CFLAGS) $(LIBSNDFILE_CFLAGS)
@@ -216,6 +220,12 @@ pax11publish_SOURCES = utils/pax11publish.c
 pax11publish_CFLAGS = $(AM_CFLAGS) $(X11_CFLAGS)
 pax11publish_LDADD = $(AM_LDADD) libpulse.la libpulsecommon-@PA_MAJORMINOR@.la $(X11_LIBS)
 pax11publish_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS)
+
+app_indicator_server_SOURCES = utils/app-indicator-server.vala
+app_indicator_server_CFLAGS = $(APPINDICATOR_CFLAGS)
+app_indicator_server_LDADD = $(AM_LDADD) $(APPINDICATOR_LIBS)
+app_indicator_server_LDFLAGS = $(AM_LDFLAGS) $(BINLDFLAGS)
+app_indicator_server_VALAFLAGS = $(APPINDICATOR_VALAFLAGS)
 
 ###################################
 #         Test programs           #
