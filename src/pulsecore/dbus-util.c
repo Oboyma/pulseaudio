@@ -477,6 +477,33 @@ void pa_dbus_send_error(DBusConnection *c, DBusMessage *in_reply_to, const char 
     pa_xfree(message);
 }
 
+pa_dbus_pending* pa_dbus_send_message(
+    DBusConnection *conn,
+    DBusMessage *msg,
+    DBusPendingCallNotifyFunction func,
+    void *context_data,
+    void *call_data) {
+
+    pa_dbus_pending *p;
+    DBusPendingCall *pending;
+
+    pa_assert(conn);
+    pa_assert(msg);
+
+    if (func) {
+        pa_assert_se(dbus_connection_send_with_reply(conn, msg, &pending, -1));
+        pa_assert(pending);
+
+        p = pa_dbus_pending_new(conn, NULL, pending, context_data, call_data);
+        dbus_pending_call_set_notify(pending, func, p, NULL);
+    } else {
+        pa_assert_se(dbus_connection_send(conn, msg, NULL));
+        p = NULL;
+    }
+
+    return p;
+}
+
 void pa_dbus_send_empty_reply(DBusConnection *c, DBusMessage *in_reply_to) {
     DBusMessage *reply = NULL;
 

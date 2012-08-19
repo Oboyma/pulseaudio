@@ -82,6 +82,17 @@ void pa_dbus_send_error(
         const char *name,
         const char *format, ...) PA_GCC_PRINTF_ATTR(4, 5);
 
+/* Sends a D-Bus message on the given connection. If `func` is NULL, the message
+ * is sent without reply and the function returns NULL, otherwise a new
+ * pa_dbus_pending is returned, with the povided context and call data. The
+ * message is not unref'ed. */
+pa_dbus_pending* pa_dbus_send_message(
+    DBusConnection *conn,
+    DBusMessage *msg,
+    DBusPendingCallNotifyFunction func,
+    void *context_data,
+    void *call_data);
+
 void pa_dbus_send_empty_reply(DBusConnection *c, DBusMessage *in_reply_to);
 void pa_dbus_send_basic_value_reply(DBusConnection *c, DBusMessage *in_reply_to, int type, void *data);
 void pa_dbus_send_basic_variant_reply(DBusConnection *c, DBusMessage *in_reply_to, int type, void *data);
