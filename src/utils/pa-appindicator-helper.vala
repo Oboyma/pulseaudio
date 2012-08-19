@@ -1,11 +1,11 @@
 using AppIndicator;
 
-[DBus (name = "org.PulseAudio.AppIndicatorServer")]
-public class AppIndicatorServer : GLib.Object {
+[DBus (name = "org.PulseAudio.AppIndicatorHelper")]
+public class AppIndicatorHelper : GLib.Object {
     private Indicator indicator;
     private HashTable<string, SList<Gtk.MenuItem>> actions;
 
-    public AppIndicatorServer(Indicator indicator) {
+    public AppIndicatorHelper(Indicator indicator) {
         this.indicator = indicator;
         this.actions = new HashTable<string, SList<Gtk.MenuItem>>(str_hash, str_equal);
     }
@@ -79,7 +79,7 @@ public class AppIndicatorServer : GLib.Object {
 
 public class PAAppIndicatorHelper : Gtk.Application {
     public PAAppIndicatorHelper() {
-        Object(application_id: "org.PulseAudio.AppIndicatorServer", inactivity_timeout: 0);
+        Object(application_id: "org.PulseAudio.AppIndicatorHelper", inactivity_timeout: 0);
     }
 
     public override bool local_command_line(ref unowned string[] args, out int exit_code) {
@@ -128,7 +128,7 @@ public class PAAppIndicatorHelper : Gtk.Application {
 
         try {
             var conn = Bus.get_sync(BusType.SESSION);
-            conn.register_object ("/org/PulseAudio/AppIndicatorServer", new AppIndicatorServer(indicator));
+            conn.register_object ("/org/PulseAudio/AppIndicatorHelper", new AppIndicatorHelper(indicator));
         } catch (IOError e) {
             this.activate();
         }

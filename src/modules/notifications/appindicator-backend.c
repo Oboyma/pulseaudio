@@ -38,9 +38,9 @@
 #include "notification.h"
 #include "notification-backend.h"
 
-#define APPINDICATOR_DBUS_NAME "org.PulseAudio.AppIndicatorServer"
-#define APPINDICATOR_DBUS_OBJECT "/org/PulseAudio/AppIndicatorServer"
-#define APPINDICATOR_DBUS_INTERFACE "org.PulseAudio.AppIndicatorServer"
+#define APPINDICATOR_DBUS_NAME "org.PulseAudio.AppIndicatorHelper"
+#define APPINDICATOR_DBUS_OBJECT "/org/PulseAudio/AppIndicatorHelper"
+#define APPINDICATOR_DBUS_INTERFACE "org.PulseAudio.AppIndicatorHelper"
 
 typedef struct appindicator_backend_userdata {
     pa_ui_notification_backend *dn_backend;
