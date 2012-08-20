@@ -34,6 +34,7 @@
 #include <pulsecore/core-error.h>
 #include <pulsecore/core-util.h>
 #include <pulsecore/database.h>
+#include <pulsecore/i18n.h>
 #include <pulsecore/log.h>
 #include <pulsecore/macro.h>
 #include <pulsecore/module.h>
@@ -254,10 +255,10 @@ static pa_hook_result_t card_put_cb(pa_core *core, pa_card *card, void *userdata
         card_name = pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION);
         pa_log_debug("Card detected: %s.", card_name);
 
-        body = pa_sprintf_malloc("Would you like to set %s as default?", card_name);
-        n = pa_ui_notification_new(notification_reply_cb, "audio-card-symbolic", card_name, "A new card has been connected.", body, -1, nu);
-        pa_hashmap_put(n->actions, "0", pa_xstrdup("Yes"));
-        pa_hashmap_put(n->actions, "1", pa_xstrdup("No"));
+        body = pa_sprintf_malloc(_("Would you like to set %s as default?"), card_name);
+        n = pa_ui_notification_new(notification_reply_cb, "audio-card-symbolic", card_name, _("A new card has been connected."), body, -1, nu);
+        pa_hashmap_put(n->actions, "0", pa_xstrdup(_("Yes")));
+        pa_hashmap_put(n->actions, "1", pa_xstrdup(_("No")));
 
         pa_xfree(body);
 
