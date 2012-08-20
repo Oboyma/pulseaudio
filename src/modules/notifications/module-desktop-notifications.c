@@ -235,7 +235,7 @@ static void notification_reply_cb(pa_ui_notification_reply* reply) {
 
 static pa_hook_result_t card_put_cb(pa_core *core, pa_card *card, void *userdata) {
     const char *card_name;
-    char *body;
+    char *summary;
     pa_ui_notification *n;
     struct userdata *u;
     struct notification_userdata *nu;
@@ -255,12 +255,12 @@ static pa_hook_result_t card_put_cb(pa_core *core, pa_card *card, void *userdata
         card_name = pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION);
         pa_log_debug("Card detected: %s.", card_name);
 
-        body = pa_sprintf_malloc(_("Would you like to set %s as default?"), card_name);
-        n = pa_ui_notification_new(notification_reply_cb, "audio-card-symbolic", card_name, _("A new card has been connected."), body, -1, nu);
-        pa_hashmap_put(n->actions, "0", pa_xstrdup(_("Yes")));
-        pa_hashmap_put(n->actions, "1", pa_xstrdup(_("No")));
+        summary = pa_sprintf_malloc(_("%s has been connected."), card_name);
+        n = pa_ui_notification_new(notification_reply_cb, "audio-card-symbolic", card_name, summary, "", -1, nu);
+        pa_hashmap_put(n->actions, "0", pa_xstrdup(_("Use as default")));
+        pa_hashmap_put(n->actions, "1", pa_xstrdup(_("Don't use as default")));
 
-        pa_xfree(body);
+        pa_xfree(summary);
 
         pa_ui_notification_manager_send(nu->u->manager, n);
     } else if (use_card == 0)
