@@ -154,7 +154,7 @@ source:
     }
 }
 
-static void card_save(pa_card *card, pa_database *database, bool use) {
+static void card_save(pa_card *card, pa_database *database, int use) {
     pa_datum key, data;
     char *card_desc;
 
@@ -164,10 +164,10 @@ static void card_save(pa_card *card, pa_database *database, bool use) {
     key.data = card_desc = pa_xstrdup(pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION));
     key.size = strlen(card_desc);
 
-    data.data = pa_xnew(bool, 1);
-    data.size = sizeof(bool);
+    data.data = pa_xnew(int, 1);
+    data.size = sizeof(int);
 
-    *(bool*)(data.data) = use;
+    *(int*)(data.data) = use;
 
     pa_assert_se(pa_database_set(database, &key, &data, true) == 0);
 
@@ -175,9 +175,10 @@ static void card_save(pa_card *card, pa_database *database, bool use) {
     pa_xfree(data.data);
 }
 
-static bool* card_load(pa_card *card, pa_database *database) {
+static int card_load(pa_card *card, pa_database *database) {
     pa_datum key, data;
     char *card_desc;
+    int result;
 
     pa_assert(card);
     pa_assert(database);
@@ -185,13 +186,16 @@ static bool* card_load(pa_card *card, pa_database *database) {
     key.data = card_desc = pa_xstrdup(pa_proplist_gets(card->proplist, PA_PROP_DEVICE_DESCRIPTION));
     key.size = strlen(card_desc);
 
-    if(pa_database_get(database, &key, &data) == NULL)
-        return NULL;
-    else
-        return (bool*) data.data;
+    if (pa_database_get(database, &key, &data) == NULL)
+        result = -1;
+    else {
+       result = *((int*)data.data);
+       pa_xfree(data.data);
+    }
 
     pa_xfree(card_desc);
-    /* TODO: who frees data.data? */
+
+    return result;
 }
 
 static void notification_reply_cb(pa_ui_notification_reply* reply) {
@@ -203,25 +207,25 @@ static void notification_reply_cb(pa_ui_notification_reply* reply) {
 
     pa_log_debug("Got notification reply for %s.", pa_proplist_gets(nu->card->proplist, PA_PROP_DEVICE_DESCRIPTION));
 
-    switch(reply->type) {
-    case PA_UI_NOTIFCATION_REPLY_ERROR:
-        pa_log_error("An error has occured with the notification for %s", pa_proplist_gets(nu->card->proplist, PA_PROP_DEVICE_DESCRIPTION));
+    switch (reply->type) {
+        case PA_UI_NOTIFCATION_REPLY_ERROR:
+            pa_log_error("An error has occured with the notification for %s", pa_proplist_gets(nu->card->proplist, PA_PROP_DEVICE_DESCRIPTION));
 
-    case PA_UI_NOTIFCATION_REPLY_CANCELLED:
-    case PA_UI_NOTIFCATION_REPLY_DISMISSED:
-    case PA_UI_NOTIFCATION_REPLY_EXPIRED:
-    default:
-        break;
+        case PA_UI_NOTIFCATION_REPLY_CANCELLED:
+        case PA_UI_NOTIFCATION_REPLY_DISMISSED:
+        case PA_UI_NOTIFCATION_REPLY_EXPIRED:
+        default:
+            break;
 
-    case PA_UI_NOTIFCATION_REPLY_ACTION_INVOKED:
-        if (pa_streq(reply->action_key, "0")) {
-            card_set_default(nu->card, nu->core);
-            card_save(nu->card, nu->u->database, true);
-        } else if (pa_streq(reply->action_key, "1")) {
-            card_save(nu->card, nu->u->database, false);
-        }
+        case PA_UI_NOTIFCATION_REPLY_ACTION_INVOKED:
+            if (pa_streq(reply->action_key, "0")) {
+                card_set_default(nu->card, nu->core);
+                card_save(nu->card, nu->u->database, 0);
+            } else if (pa_streq(reply->action_key, "1")) {
+                card_save(nu->card, nu->u->database, 1);
+            }
 
-        break;
+            break;
     }
 
     pa_xfree(nu);
@@ -234,15 +238,14 @@ static pa_hook_result_t card_put_cb(pa_core *core, pa_card *card, void *userdata
     pa_ui_notification *n;
     struct userdata *u;
     struct notification_userdata *nu;
-    bool *use_card;
+    int use_card;
 
     pa_assert(core);
     pa_assert(card);
-    pa_assert(userdata);
 
-    u = userdata;
+    pa_assert_se(u = userdata);
 
-    if((use_card = card_load(card, u->database)) == NULL) {
+    if ((use_card = card_load(card, u->database)) < 0) {
         nu = pa_xnew(struct notification_userdata, 1);
 
         nu->u = u;
@@ -259,11 +262,8 @@ static pa_hook_result_t card_put_cb(pa_core *core, pa_card *card, void *userdata
         pa_xfree(body);
 
         pa_ui_notification_manager_send(nu->u->manager, n);
-    } else if (*use_card)
+    } else if (use_card == 0)
         card_set_default(card, core);
-
-    if(use_card)
-        pa_xfree(use_card);
 
     return PA_HOOK_OK;
 }
@@ -307,10 +307,10 @@ void pa__done(pa_module*m) {
     if (u->card_put_slot)
         pa_hook_slot_free(u->card_put_slot);
 
-    if(u->database)
+    if (u->database)
         pa_database_close(u->database);
 
-    if(u->manager)
+    if (u->manager)
         pa_ui_notification_manager_unref(u->manager);
 
     pa_xfree(u);
