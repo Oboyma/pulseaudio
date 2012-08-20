@@ -1147,7 +1147,7 @@ AC_ARG_ENABLE([appindicator],
     AS_HELP_STRING([--disable-appindicator],[Disable optional Application Indicator support]))
 
 AS_IF([test "x$enable_appindicator" != "xno"],
-    [PKG_CHECK_MODULES(APPINDICATOR, [ appindicator-0.1 gio-2.0 ], HAVE_APPINDICATOR=1, HAVE_APPINDICATOR=0)],
+    [PKG_CHECK_MODULES(APPINDICATOR, [ appindicator3-0.1 gio-2.0 ], HAVE_APPINDICATOR=1, HAVE_APPINDICATOR=0)],
     HAVE_APPINDICATOR=0)
 
 AM_PROG_VALAC
@@ -1164,7 +1164,7 @@ AS_IF([test "x$HAVE_DESKTOP_NOTIFICATIONS" != "x1"], HAVE_APPINDICATOR=0)
 
 AC_SUBST(APPINDICATOR_CFLAGS)
 AC_SUBST(APPINDICATOR_LIBS)
-AC_SUBST(APPINDICATOR_VALAFLAGS, "--pkg gtk+-2.0 --pkg appindicator-0.1 --pkg gio-2.0")
+AC_SUBST(APPINDICATOR_VALAFLAGS, "--pkg gtk+-3.0 --pkg appindicator3-0.1 --pkg gio-2.0 --pkg posix")
 
 AM_CONDITIONAL([HAVE_APPINDICATOR], [test "x$HAVE_APPINDICATOR" = x1])
 

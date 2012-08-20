@@ -1,12 +1,11 @@
-using Gtk;
 using AppIndicator;
 
-[DBus (name = "org.PulseAudio.AppIndicatorServer")]
-public class AppIndicatorServer : GLib.Object {
+[DBus (name = "org.PulseAudio.AppIndicatorHelper")]
+public class AppIndicatorHelper : GLib.Object {
     private Indicator indicator;
     private HashTable<string, SList<Gtk.MenuItem>> actions;
 
-    public AppIndicatorServer(Indicator indicator) {
+    public AppIndicatorHelper(Indicator indicator) {
         this.indicator = indicator;
         this.actions = new HashTable<string, SList<Gtk.MenuItem>>(str_hash, str_equal);
     }
@@ -78,28 +77,71 @@ public class AppIndicatorServer : GLib.Object {
     public signal void action_invoked(string title, string action_key);
 }
 
+public class PAAppIndicatorHelper : Gtk.Application {
+    public PAAppIndicatorHelper() {
+        Object(application_id: "org.PulseAudio.AppIndicatorHelper", inactivity_timeout: 0);
+    }
+
+    public override bool local_command_line(ref unowned string[] args, out int exit_code) {
+        try {
+            this.register();
+        } catch (GLib.Error e) {
+            stderr.printf("%s\n", e.message);
+
+            exit_code = 1;
+            return true;
+        }
+
+        if (strv_length(args) > 1 && args[1] == "--start") {
+            if (!this.is_remote)
+                register_helper();
+        } else if (strv_length(args) > 1 && args[1] == "--stop") {
+            if (!this.is_remote)
+                stderr.printf("Not running.\n");
+
+            this.activate();
+        } else {
+            stderr.printf("Usage: --start or --stop\n");
+
+            if (!this.is_remote)
+               this.activate();
+        }
+
+        exit_code = 0;
+        return true;
+    }
+
+    public override void startup() {
+        base.startup();
+        this.hold();
+
+        this.activate.connect(this.release);
+    }
+
+    private void register_helper() {
+        var indicator = new Indicator("PulseAudio", "audio-card-symbolic", IndicatorCategory.HARDWARE);
+
+        indicator.set_status(IndicatorStatus.PASSIVE);
+
+        var menu = new Gtk.Menu();
+        indicator.set_menu(menu);
+
+        try {
+            var conn = Bus.get_sync(BusType.SESSION);
+            conn.register_object ("/org/PulseAudio/AppIndicatorHelper", new AppIndicatorHelper(indicator));
+        } catch (IOError e) {
+            this.activate();
+        }
+    }
+}
+
 public static int main(string[] args) {
-    Gtk.init(ref args);
-    var indicator = new Indicator("PulseAudio", "audio-card-symbolic", IndicatorCategory.HARDWARE);
+    if (args.length > 1 && args[1] == "--start") {
+        uint pid = Posix.fork();
 
-    indicator.set_status(IndicatorStatus.PASSIVE);
+        if (pid != 0)
+            return 0;
+    }
 
-    var menu = new Gtk.Menu();
-    indicator.set_menu(menu);
-
-    Bus.own_name(BusType.SESSION, "org.PulseAudio.AppIndicatorServer", BusNameOwnerFlags.NONE,
-        (conn) => {
-            try {
-                conn.register_object ("/org/PulseAudio/AppIndicatorServer", new AppIndicatorServer(indicator));
-            } catch (IOError e) {
-                stderr.printf ("Could not register service\n");
-            }
-        },
-        () => {},
-        Gtk.main_quit
-    );
-
-    Gtk.main();
-
-    return 0;
+    return new PAAppIndicatorHelper().run(args);
 }
