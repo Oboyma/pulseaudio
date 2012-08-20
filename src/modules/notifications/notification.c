@@ -31,7 +31,11 @@
 #include "notification-backend.h"
 
 pa_ui_notification* pa_ui_notification_new(pa_ui_notification_reply_cb_t reply_cb, const char* icon, const char *title, const char* summary, const char* body, int timeout, void *userdata) {
-    pa_ui_notification *n = pa_xnew0(pa_ui_notification, 1);
+    pa_ui_notification *n;
+
+    pa_assert(reply_cb);
+
+    n = pa_xnew0(pa_ui_notification, 1);
 
     if (icon)
         n->icon = pa_xstrdup(icon);
@@ -58,6 +62,8 @@ static void free_func(void* p, void* userdata) {
 }
 
 void pa_ui_notification_free(pa_ui_notification *n) {
+    pa_assert(n);
+
     pa_xfree(n->icon);
     pa_xfree(n->title);
     pa_xfree(n->summary);
@@ -68,7 +74,9 @@ void pa_ui_notification_free(pa_ui_notification *n) {
 }
 
 pa_ui_notification_reply* pa_ui_notification_reply_new(pa_ui_notification_reply_type_t type, pa_ui_notification *source, char *action_key) {
-    pa_ui_notification_reply *reply = pa_xnew0(pa_ui_notification_reply, 1);
+    pa_assert(source);
+
+    pa_ui_notification_reply *reply = pa_xnew(pa_ui_notification_reply, 1);
 
     reply->type = type;
     reply->source = source;
@@ -78,6 +86,8 @@ pa_ui_notification_reply* pa_ui_notification_reply_new(pa_ui_notification_reply_
 }
 
 void pa_ui_notification_reply_free(pa_ui_notification_reply *reply) {
+    pa_assert(reply);
+
     pa_ui_notification_free(reply->source);
     pa_xfree(reply);
 }

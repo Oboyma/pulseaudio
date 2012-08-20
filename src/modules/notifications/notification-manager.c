@@ -42,7 +42,7 @@ struct pa_ui_notification_manager {
     pa_ui_notification_backend *backend;
 };
 
-static pa_ui_notification_manager* pa_ui_notification_manager_new(pa_core *c) {
+static pa_ui_notification_manager* ui_notification_manager_new(pa_core *c) {
     pa_ui_notification_manager *m;
 
     pa_assert(c);
@@ -58,7 +58,7 @@ static pa_ui_notification_manager* pa_ui_notification_manager_new(pa_core *c) {
     return m;
 }
 
-static void pa_ui_notification_manager_free(pa_ui_notification_manager *m) {
+static void ui_notification_manager_free(pa_ui_notification_manager *m) {
     pa_assert(m);
 
     pa_assert_se(pa_shared_remove(m->core, "ui-notification-manager") >= 0);
@@ -69,10 +69,10 @@ static void pa_ui_notification_manager_free(pa_ui_notification_manager *m) {
 pa_ui_notification_manager* pa_ui_notification_manager_get(pa_core *c) {
     pa_ui_notification_manager *m;
 
-    if((m = pa_shared_get(c, "ui-notification-manager")))
+    if ((m = pa_shared_get(c, "ui-notification-manager")))
         return pa_ui_notification_manager_ref(m);
 
-    return pa_ui_notification_manager_new(c);
+    return ui_notification_manager_new(c);
 }
 
 pa_ui_notification_manager* pa_ui_notification_manager_ref(pa_ui_notification_manager *m) {
@@ -88,15 +88,15 @@ void pa_ui_notification_manager_unref(pa_ui_notification_manager *m) {
     pa_assert(m);
     pa_assert(PA_REFCNT_VALUE(m) >= 1);
 
-    if(PA_REFCNT_DEC(m) <= 0)
-        pa_ui_notification_manager_free(m);
+    if (PA_REFCNT_DEC(m) <= 0)
+        ui_notification_manager_free(m);
 }
 
 int pa_ui_notification_manager_register_backend(pa_ui_notification_manager *m, pa_ui_notification_backend *b) {
     pa_assert(m);
     pa_assert(b);
 
-    if(m->backend != NULL) {
+    if (m->backend != NULL) {
         pa_log_error("A UI notification backend is already registered.");
         return -1;
     }
@@ -122,7 +122,7 @@ int pa_ui_notification_manager_send(pa_ui_notification_manager *m, pa_ui_notific
     pa_assert(m);
     pa_assert(n);
 
-    if(m->backend == NULL) {
+    if (m->backend == NULL) {
         pa_log_error("No UI notification backend is registered.");
         return -1;
     }
@@ -136,7 +136,7 @@ int pa_ui_notification_manager_cancel(pa_ui_notification_manager *m, pa_ui_notif
     pa_assert(m);
     pa_assert(n);
 
-    if(m->backend == NULL) {
+    if (m->backend == NULL) {
         pa_log_error("No UI notification backend is registered.");
         return -1;
     }

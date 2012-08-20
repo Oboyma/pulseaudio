@@ -50,14 +50,14 @@ int pa__init(pa_module*m) {
 
     pa_assert(m);
 
-    if((backend = appindicator_backend_new(m->core)) == NULL)
+    if ((backend = appindicator_backend_new(m->core)) == NULL)
         goto fail;
 
     m->userdata = u = pa_xnew(struct userdata, 1);
     u->manager = manager = pa_ui_notification_manager_get(m->core);
     u->backend = backend;
 
-    if(pa_ui_notification_manager_register_backend(manager, backend) >= 0)
+    if (pa_ui_notification_manager_register_backend(manager, backend) >= 0)
         return 0;
 
 fail:
@@ -74,12 +74,12 @@ void pa__done(pa_module*m) {
 
     backend = u->backend;
     if ((u = m->userdata)) {
-        if(pa_ui_notification_manager_get_backend(u->manager) == backend)
+        if (pa_ui_notification_manager_get_backend(u->manager) == backend)
             pa_ui_notification_manager_unregister_backend(u->manager);
 
         pa_ui_notification_manager_unref(u->manager);
     }
 
-    if(backend)
+    if (backend)
         appindicator_backend_free(backend);
 }
