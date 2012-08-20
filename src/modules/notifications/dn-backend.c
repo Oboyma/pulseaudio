@@ -38,15 +38,33 @@
 #include "notification.h"
 #include "notification-backend.h"
 
+struct userdata {
+    char *app_name;
+    char *app_icon;
+
+    pa_dbus_connection *conn;
+    pa_hashmap* displaying;
+    pa_idxset* cancelling;
+    PA_LLIST_HEAD(pa_dbus_pending, pending_send);
+
+    dn_handle_reply_cb_t notification_reply_handle;
+    void *reply_handle_userdata;
+
+    bool use_actions;
+    bool filter_set;
+};
+
+
 static inline void cancel_notification_dbus(pa_ui_notification_backend *backend, pa_ui_notification *notification, unsigned *dbus_notification_id) {
     DBusConnection *conn;
     DBusMessage *msg;
-    dn_backend_userdata *u;
+    struct userdata *u;
 
     pa_assert(backend);
     pa_assert(notification);
     pa_assert(dbus_notification_id);
-    pa_assert(u = backend->userdata);
+
+    pa_assert_se(u = backend->userdata);
 
     conn = pa_dbus_connection_get(u->conn);
     pa_assert_se(msg = dbus_message_new_method_call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "CloseNotification"));
@@ -66,7 +84,7 @@ static void send_notification_reply(DBusPendingCall *pending, void *userdata) {
     pa_ui_notification_backend *backend;
     pa_ui_notification *notification;
     pa_dbus_pending *p;
-    dn_backend_userdata *u;
+    struct userdata *u;
     unsigned *dbus_notification_id;
 
     pa_assert(pending);
@@ -120,11 +138,9 @@ finish:
     pa_dbus_pending_free(p);
 }
 
-static void dn_send_notification(pa_ui_notification_backend *b, pa_ui_notification *n) {
-    send_notification(b, n, true);
-}
-
 static void handle_reply(pa_ui_notification_reply *reply, void *useradata) {
+    pa_assert(reply);
+
     reply->source->reply_cb(reply);
 }
 
@@ -132,7 +148,7 @@ static DBusHandlerResult signal_cb(DBusConnection *conn, DBusMessage *msg, void 
     DBusError err;
     pa_ui_notification_backend *backend;
     pa_ui_notification *notification;
-    dn_backend_userdata *u;
+    struct userdata *u;
     void *state;
 
     unsigned dbus_notification_id, reason, *id;
@@ -140,7 +156,8 @@ static DBusHandlerResult signal_cb(DBusConnection *conn, DBusMessage *msg, void 
 
     pa_assert(conn);
     pa_assert(msg);
-    pa_assert(backend = userdata);
+
+    pa_assert_se(backend = userdata);
 
    /*  pa_log_debug("Message received: %s.%s", dbus_message_get_interface(msg), dbus_message_get_member(msg)); */
 
@@ -158,28 +175,27 @@ static DBusHandlerResult signal_cb(DBusConnection *conn, DBusMessage *msg, void 
            first. That might not always be the case. */
         PA_HASHMAP_FOREACH_KEY(id, notification, u->displaying, state) {
             if (*id == dbus_notification_id) {
-                switch(reason) {
-                case 1: /* expired */
-                    u->notification_reply_handle(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_EXPIRED, notification, NULL), u->reply_handle_userdata);
-                    break;
+                switch (reason) {
+                    case 1: /* expired */
+                        u->notification_reply_handle(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_EXPIRED, notification, NULL), u->reply_handle_userdata);
+                        break;
 
-                case 2: /* dismissed */
-                    /* what if ActionInvoked emitted after NotificationClosed */
-                    u->notification_reply_handle(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_DISMISSED, notification, NULL), u->reply_handle_userdata);
-                    break;
+                    case 2: /* dismissed */
+                        u->notification_reply_handle(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_DISMISSED, notification, NULL), u->reply_handle_userdata);
+                        break;
 
-                case 3: /* CloseNotification */
-                    /* handled when CloseNotification was called */
-                    break;
+                    case 3: /* CloseNotification */
+                        /* handled before CloseNotification was called */
+                        break;
 
-                case 4: /* undefined/reserved */
-                default:
-                    u->notification_reply_handle(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL), u->reply_handle_userdata);
-                    break;
+                    case 4: /* undefined/reserved */
+                    default:
+                        u->notification_reply_handle(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ERROR, notification, NULL), u->reply_handle_userdata);
+                        break;
                 }
 
-                pa_xfree(id);
                 pa_hashmap_remove(u->displaying, notification);
+                pa_xfree(id);
 
                 break;
             }
@@ -196,8 +212,8 @@ static DBusHandlerResult signal_cb(DBusConnection *conn, DBusMessage *msg, void 
                 u->notification_reply_handle(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_ACTION_INVOKED, notification, action_key), u->reply_handle_userdata);
             }
 
-            pa_xfree(id);
             pa_hashmap_remove(u->displaying, notification);
+            pa_xfree(id);
         }
     }
 
@@ -212,10 +228,11 @@ static void displaying_notifications_cancel(pa_ui_notification_backend *backend)
     pa_ui_notification *notification;
     unsigned *dbus_notification_id;
 
-    struct dn_backend_userdata *u;
+    struct userdata *u;
 
     pa_assert(backend);
-    pa_assert(u = backend->userdata);
+
+    pa_assert_se(u = backend->userdata);
 
     PA_HASHMAP_FOREACH_KEY(dbus_notification_id, notification, u->displaying, state) {
         pa_hashmap_remove(u->displaying, notification);
@@ -226,10 +243,11 @@ static void displaying_notifications_cancel(pa_ui_notification_backend *backend)
 static void pending_notifications_cancel(pa_ui_notification_backend *backend) {
     pa_dbus_pending *i;
     pa_ui_notification *notification;
-    struct dn_backend_userdata *u;
+    struct userdata *u;
 
     pa_assert(backend);
-    pa_assert(u = backend->userdata);
+
+    pa_assert_se(u = backend->userdata);
 
     while ((i = u->pending_send)) {
         PA_LLIST_REMOVE(pa_dbus_pending, u->pending_send, i);
@@ -241,19 +259,96 @@ static void pending_notifications_cancel(pa_ui_notification_backend *backend) {
     }
 }
 
-pa_ui_notification_backend* dn_backend_new(pa_core *core) {
-    return dn_backend_new_with_reply_handle(core, handle_reply, NULL);
+static void send_notification(pa_ui_notification_backend *b, pa_ui_notification *n) {
+    DBusConnection *conn;
+    DBusMessage *msg;
+    DBusMessageIter args, dict_iter, array_iter;
+    pa_dbus_pending *p;
+    unsigned *replaces_id;
+    char *key, *value;
+    void *state;
+    struct userdata *u;
+
+    pa_assert(b);
+    pa_assert(n);
+
+    replaces_id = 0; /* match the existing notifications against the notification to be replaced */
+
+    u = b->userdata;
+    conn = pa_dbus_connection_get(u->conn);
+
+    replaces_id = NULL;
+    if (n->replaced_notification != NULL)
+        replaces_id = pa_hashmap_remove(u->displaying, n->replaced_notification);
+
+    if (replaces_id == NULL)
+        replaces_id = pa_xnew0(unsigned, 1);
+
+    pa_assert_se(msg = dbus_message_new_method_call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "Notify"));
+
+    dbus_message_iter_init_append(msg, &args);
+
+    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &u->app_name));
+    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, (void *) replaces_id));
+    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->icon));
+    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->summary));
+    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->body));
+
+    pa_assert_se(dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "s", &array_iter));
+
+    if (u->use_actions)
+        PA_HASHMAP_FOREACH_KEY(value, key, n->actions, state) {
+            pa_assert_se(dbus_message_iter_append_basic(&array_iter, DBUS_TYPE_STRING, (void *) &key));
+            pa_assert_se(dbus_message_iter_append_basic(&array_iter, DBUS_TYPE_STRING, (void *) &value));
+        }
+
+    pa_assert_se(dbus_message_iter_close_container(&args, &array_iter));
+
+
+    pa_assert_se(dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "{sv}", &dict_iter));
+    /* TODO: hints */
+    pa_assert_se(dbus_message_iter_close_container(&args, &dict_iter));
+
+    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_INT32, (void *) &n->expire_timeout));
+
+    p = pa_dbus_send_message(conn, msg, send_notification_reply, b, n);
+    dbus_message_unref(msg);
+
+    PA_LLIST_PREPEND(pa_dbus_pending, u->pending_send, p);
+
+    pa_xfree(replaces_id);
 }
 
-pa_ui_notification_backend* dn_backend_new_with_reply_handle(pa_core *core, dn_handle_reply_cb_t notification_reply_handle, void *userdata) {
+static void cancel_notification(pa_ui_notification_backend *backend, pa_ui_notification *notification) {
+    struct userdata *u;
+    unsigned *dbus_notification_id;
+
+    pa_assert(backend);
+
+    pa_assert_se(u = backend->userdata);
+
+    if ((dbus_notification_id = pa_hashmap_remove(u->displaying, notification))) {
+        cancel_notification_dbus(backend, notification, dbus_notification_id);
+
+        u->notification_reply_handle(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_CANCELLED, notification, NULL), u->reply_handle_userdata);
+    } else {
+        pa_idxset_put(u->cancelling, notification, NULL);
+    }
+}
+
+pa_ui_notification_backend* dn_backend_new(pa_core *core) {
+    return dn_backend_new_with_reply_handle(core, true, handle_reply, NULL);
+}
+
+pa_ui_notification_backend* dn_backend_new_with_reply_handle(pa_core *core, bool use_actions, dn_handle_reply_cb_t notification_reply_handle, void *userdata) {
     DBusError err;
     pa_ui_notification_backend *backend;
-    dn_backend_userdata *u;
+    struct userdata *u;
 
     pa_assert(core);
 
     backend = pa_xnew0(pa_ui_notification_backend, 1);
-    backend->userdata = u = pa_xnew(dn_backend_userdata, 1);
+    backend->userdata = u = pa_xnew(struct userdata, 1);
 
     dbus_error_init(&err);
     u->conn = pa_dbus_bus_get(core, DBUS_BUS_SESSION, &err);
@@ -268,10 +363,11 @@ pa_ui_notification_backend* dn_backend_new_with_reply_handle(pa_core *core, dn_h
     u->cancelling = pa_idxset_new(pa_idxset_trivial_hash_func, pa_idxset_trivial_compare_func);
     u->notification_reply_handle = notification_reply_handle;
     u->reply_handle_userdata = userdata;
+    u->use_actions = use_actions;
 
     PA_LLIST_HEAD_INIT(pa_dbus_pending, u->pending_send);
 
-    backend->send_notification = dn_send_notification;
+    backend->send_notification = send_notification;
     backend->cancel_notification = cancel_notification;
 
 
@@ -296,7 +392,7 @@ fail:
 }
 
 void dn_backend_free(pa_ui_notification_backend *backend) {
-    dn_backend_userdata *u;
+    struct userdata *u;
 
     pa_assert(backend);
     u = backend->userdata;
@@ -319,101 +415,4 @@ void dn_backend_free(pa_ui_notification_backend *backend) {
 
     pa_xfree(u);
     pa_xfree(backend);
-}
-
-void send_notification(pa_ui_notification_backend *b, pa_ui_notification *n, bool use_actions) {
-    DBusConnection *conn;
-    DBusMessage *msg;
-    DBusMessageIter args, dict_iter, array_iter;
-    pa_dbus_pending *p;
-    unsigned *replaces_id;
-    char *key, *value;
-    void *state;
-    dn_backend_userdata *u;
-
-    u = b->userdata;
-    conn = pa_dbus_connection_get(u->conn);
-
-    replaces_id = NULL;
-    if (n->replaced_notification != NULL)
-        replaces_id = pa_hashmap_remove(u->displaying, n->replaced_notification);
-
-    if (replaces_id == NULL)
-        replaces_id = pa_xnew0(unsigned, 1);
-
-    pa_assert_se(msg = dbus_message_new_method_call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "Notify"));
-
-    dbus_message_iter_init_append(msg, &args);
-
-    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &u->app_name));
-    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, (void *) replaces_id));
-    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->icon));
-    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->summary));
-    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, (void *) &n->body));
-
-    pa_assert_se(dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "s", &array_iter));
-
-    if (use_actions)
-        PA_HASHMAP_FOREACH_KEY(value, key, n->actions, state) {
-            pa_assert_se(dbus_message_iter_append_basic(&array_iter, DBUS_TYPE_STRING, (void *) &key));
-            pa_assert_se(dbus_message_iter_append_basic(&array_iter, DBUS_TYPE_STRING, (void *) &value));
-        }
-
-    pa_assert_se(dbus_message_iter_close_container(&args, &array_iter));
-
-
-    pa_assert_se(dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "{sv}", &dict_iter));
-    /* TODO: hints */
-    pa_assert_se(dbus_message_iter_close_container(&args, &dict_iter));
-
-    pa_assert_se(dbus_message_iter_append_basic(&args, DBUS_TYPE_INT32, (void *) &n->expire_timeout));
-
-    p = pa_dbus_send_message(conn, msg, send_notification_reply, b, n);
-    dbus_message_unref(msg);
-
-    PA_LLIST_PREPEND(pa_dbus_pending, u->pending_send, p);
-
-    pa_xfree(replaces_id);
-}
-
-void cancel_notification(pa_ui_notification_backend *backend, pa_ui_notification *notification) {
-    dn_backend_userdata *u;
-    unsigned *dbus_notification_id;
-
-    u = backend->userdata;
-
-    if ((dbus_notification_id = pa_hashmap_remove(u->displaying, notification))) {
-        cancel_notification_dbus(backend, notification, dbus_notification_id);
-
-        u->notification_reply_handle(pa_ui_notification_reply_new(PA_UI_NOTIFCATION_REPLY_CANCELLED, notification, NULL), u->reply_handle_userdata);
-    } else {
-        pa_idxset_put(u->cancelling, notification, NULL);
-    }
-}
-
-pa_dbus_pending* pa_dbus_send_message(
-    DBusConnection *conn,
-    DBusMessage *msg,
-    DBusPendingCallNotifyFunction func,
-    void *context_data,
-    void *call_data) {
-
-    pa_dbus_pending *p;
-    DBusPendingCall *pending;
-
-    pa_assert(conn);
-    pa_assert(msg);
-
-    if (func) {
-        pa_assert_se(dbus_connection_send_with_reply(conn, msg, &pending, -1));
-        pa_assert(pending);
-
-        p = pa_dbus_pending_new(conn, NULL, pending, context_data, call_data);
-        dbus_pending_call_set_notify(pending, func, p, NULL);
-    } else {
-        pa_assert_se(dbus_connection_send(conn, msg, NULL));
-        p = NULL;
-    }
-
-    return p;
 }

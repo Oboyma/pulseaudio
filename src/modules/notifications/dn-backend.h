@@ -29,39 +29,12 @@
 #include <pulsecore/idxset.h>
 #include <pulsecore/llist.h>
 
-#include "notification.h"
 #include "notification-backend.h"
 
 typedef void (*dn_handle_reply_cb_t)(pa_ui_notification_reply *reply, void *userdata);
 
-typedef struct dn_backend_userdata {
-    char *app_name;
-    char *app_icon;
-
-    pa_dbus_connection *conn;
-    pa_hashmap* displaying;
-    pa_idxset* cancelling;
-    PA_LLIST_HEAD(pa_dbus_pending, pending_send);
-
-    dn_handle_reply_cb_t notification_reply_handle;
-    void *reply_handle_userdata;
-
-    bool filter_set;
-} dn_backend_userdata;
-
-
-pa_dbus_pending* pa_dbus_send_message(
-    DBusConnection *conn,
-    DBusMessage *msg,
-    DBusPendingCallNotifyFunction func,
-    void *context_data,
-    void *call_data);
-
-void send_notification(pa_ui_notification_backend *b, pa_ui_notification *n, bool use_actions);
-void cancel_notification(pa_ui_notification_backend *backend, pa_ui_notification *notification);
-
 pa_ui_notification_backend* dn_backend_new(pa_core *core);
-pa_ui_notification_backend* dn_backend_new_with_reply_handle(pa_core *core, dn_handle_reply_cb_t notification_reply_handle, void *userdata);
+pa_ui_notification_backend* dn_backend_new_with_reply_handle(pa_core *core, bool use_actions, dn_handle_reply_cb_t notification_reply_handle, void *userdata);
 void dn_backend_free(pa_ui_notification_backend *backend);
 
 #endif

@@ -42,15 +42,15 @@
 #define APPINDICATOR_DBUS_OBJECT "/org/PulseAudio/AppIndicatorServer"
 #define APPINDICATOR_DBUS_INTERFACE "org.PulseAudio.AppIndicatorServer"
 
-typedef struct appindicator_backend_userdata {
+struct userdata {
     pa_ui_notification_backend *dn_backend;
     pa_dbus_connection *conn;
     pa_hashmap *displaying;
     pa_idxset *handled;
     bool filter_set;
-} appindicator_backend_userdata;
+};
 
-static void clear_all_actions(appindicator_backend_userdata *u) {
+static void clear_all_actions(struct userdata *u) {
     DBusConnection *conn;
     DBusMessage *msg;
 
@@ -64,7 +64,7 @@ static void clear_all_actions(appindicator_backend_userdata *u) {
     dbus_message_unref(msg);
 }
 
-static void clear_actions(appindicator_backend_userdata *u, pa_ui_notification *notification) {
+static void clear_actions(struct userdata *u, pa_ui_notification *notification) {
     DBusConnection *conn;
     DBusMessage *msg;
 
@@ -83,14 +83,15 @@ static void clear_actions(appindicator_backend_userdata *u, pa_ui_notification *
     pa_hashmap_remove(u->displaying, notification->title);
 }
 
-static void appindicator_send_notification(pa_ui_notification_backend *backend, pa_ui_notification *notification) {
-    appindicator_backend_userdata *u;
+static void send_notification(pa_ui_notification_backend *backend, pa_ui_notification *notification) {
+    struct userdata *u;
     char *key, *value;
     void *state;
 
     pa_assert(backend);
     pa_assert(notification);
-    pa_assert(u = backend->userdata);
+
+    pa_assert_se(u = backend->userdata);
 
     if (!pa_hashmap_isempty(notification->actions)) {
         DBusConnection *conn;
@@ -120,25 +121,28 @@ static void appindicator_send_notification(pa_ui_notification_backend *backend, 
         pa_hashmap_put(u->displaying, notification->title, notification);
     }
 
-    send_notification(u->dn_backend, notification, false);
+    u->dn_backend->send_notification(u->dn_backend, notification);
 }
 
-static void appindicator_cancel_notification(pa_ui_notification_backend *backend, pa_ui_notification *notification) {
-    appindicator_backend_userdata *u;
+static void cancel_notification(pa_ui_notification_backend *backend, pa_ui_notification *notification) {
+    struct userdata *u;
 
     pa_assert(backend);
     pa_assert(notification);
 
-    pa_assert(u = backend->userdata);
+    pa_assert_se(u = backend->userdata);
 
-    cancel_notification(u->dn_backend, notification);
+    clear_actions(backend, notification);
+
+    u->dn_backend->cancel_notification(u->dn_backend, notification);
 }
 
 static void handle_reply(pa_ui_notification_reply *reply, void *userdata) {
-    appindicator_backend_userdata *u;
+    struct userdata *u;
 
     pa_assert(reply);
-    pa_assert(u = userdata);
+
+    pa_assert_se(u = userdata);
 
     if (pa_idxset_remove_by_data(u->handled, reply->source->title, NULL) == NULL) {
         clear_actions(u, reply->source);
@@ -150,13 +154,14 @@ static DBusHandlerResult signal_cb(DBusConnection *conn, DBusMessage *msg, void 
     DBusError err;
     pa_ui_notification_backend *backend;
     pa_ui_notification *notification;
-    appindicator_backend_userdata *u;
+    struct userdata *u;
     char *title, *action_key;
 
     pa_assert(conn);
     pa_assert(msg);
     pa_assert(backend = userdata);
-    pa_assert(u = backend->userdata);
+
+    pa_assert_se(u = backend->userdata);
 
     dbus_error_init(&err);
 
@@ -184,19 +189,23 @@ finish:
 pa_ui_notification_backend* appindicator_backend_new(pa_core *core) {
     DBusError err;
     pa_ui_notification_backend *backend;
-    appindicator_backend_userdata *u;
-    dn_backend_userdata *dn_u;
+    struct userdata *u;
 
     pa_assert(core);
 
     backend = pa_xnew(pa_ui_notification_backend, 1);
-    backend->userdata = u = pa_xnew(appindicator_backend_userdata, 1);
+    backend->userdata = u = pa_xnew(struct userdata, 1);
 
-    if (!(u->dn_backend = dn_backend_new_with_reply_handle(core, handle_reply, (void *) u)))
+    if (!(u->dn_backend = dn_backend_new_with_reply_handle(core, false, handle_reply, (void *) u)))
         goto fail;
 
-    dn_u = u->dn_backend->userdata;
-    u->conn = dn_u->conn;
+    dbus_error_init(&err);
+    u->conn = pa_dbus_bus_get(core, DBUS_BUS_SESSION, &err);
+
+    if (dbus_error_is_set(&err)) {
+        pa_log_error("Failed to aquire D-Bus connection: %s", err.message);
+        goto fail;
+    }
 
     u->displaying = pa_hashmap_new(pa_idxset_string_hash_func, pa_idxset_string_compare_func);
     u->handled = pa_idxset_new(pa_idxset_string_hash_func, pa_idxset_string_compare_func);
@@ -207,7 +216,6 @@ pa_ui_notification_backend* appindicator_backend_new(pa_core *core) {
     }
     u->filter_set = true;
 
-    dbus_error_init(&err);
     if (pa_dbus_add_matches(pa_dbus_connection_get(u->conn), &err,
         "type='signal',sender='" APPINDICATOR_DBUS_NAME
         "',interface='" APPINDICATOR_DBUS_INTERFACE
@@ -217,21 +225,23 @@ pa_ui_notification_backend* appindicator_backend_new(pa_core *core) {
         goto fail;
     }
 
-    backend->send_notification = appindicator_send_notification;
-    backend->cancel_notification = appindicator_cancel_notification;
+    backend->send_notification = send_notification;
+    backend->cancel_notification = cancel_notification;
 
     return backend;
 
 fail:
+    dbus_error_free(&err);
     appindicator_backend_free(backend);
     return NULL;
 }
 
 void appindicator_backend_free(pa_ui_notification_backend *backend) {
-    appindicator_backend_userdata *u;
+    struct userdata *u;
 
     pa_assert(backend);
-    pa_assert(u = backend->userdata);
+
+    pa_assert_se(u = backend->userdata);
 
     clear_all_actions(u);
 
